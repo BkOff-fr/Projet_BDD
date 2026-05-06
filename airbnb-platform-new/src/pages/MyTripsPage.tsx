@@ -39,12 +39,14 @@ const statusPillClass = (status: BookingStatus): string => {
   }
 };
 
-/** Today's date as YYYY-MM-DD for lexicographic comparison with ISO date strings. */
+/** Today's date as YYYY-MM-DD for lexicographic comparison with ISO date strings.
+ *  Uses UTC accessors so users outside UTC don't get bookings misclassified
+ *  around midnight (the booking dates returned by the API are UTC ISO dates). */
 const todayISO = (): string => {
   const d = new Date();
-  const yyyy = d.getFullYear();
-  const mm = String(d.getMonth() + 1).padStart(2, '0');
-  const dd = String(d.getDate()).padStart(2, '0');
+  const yyyy = d.getUTCFullYear();
+  const mm = String(d.getUTCMonth() + 1).padStart(2, '0');
+  const dd = String(d.getUTCDate()).padStart(2, '0');
   return `${yyyy}-${mm}-${dd}`;
 };
 
@@ -94,17 +96,8 @@ const BookingCard = ({ booking, tab }: BookingCardProps) => {
     tab === 'past' && booking.status === 'completed' && !booking.hasReview;
 
   return (
-    <div
-      role="button"
-      tabIndex={0}
-      onClick={goToDetail}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault();
-          goToDetail();
-        }
-      }}
-      className="flex flex-col sm:flex-row gap-4 p-4 border border-gray-200 rounded-xl bg-white hover:shadow-md transition-shadow cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary"
+    <article
+      className="flex flex-col sm:flex-row gap-4 p-4 border border-gray-200 rounded-xl bg-white hover:shadow-md transition-shadow"
     >
       <img
         src={PLACEHOLDER_IMAGE}
@@ -159,8 +152,7 @@ const BookingCard = ({ booking, tab }: BookingCardProps) => {
         <div className="flex flex-wrap items-center gap-2 mt-3">
           {tab === 'upcoming' && (
             <button
-              onClick={(e) => {
-                e.stopPropagation();
+              onClick={() => {
                 // TODO(P1-T2): wire to bookingsAPI.cancel(booking.id) with a
                 // confirmation dialog and refresh the list on success.
                 // eslint-disable-next-line no-console
@@ -174,8 +166,7 @@ const BookingCard = ({ booking, tab }: BookingCardProps) => {
           )}
           {canReview && (
             <button
-              onClick={(e) => {
-                e.stopPropagation();
+              onClick={() => {
                 // TODO(P1-T3): open the review form modal seeded with this
                 // booking id; on submit call bookingsAPI.createReview(...).
                 // eslint-disable-next-line no-console
@@ -188,10 +179,7 @@ const BookingCard = ({ booking, tab }: BookingCardProps) => {
             </button>
           )}
           <button
-            onClick={(e) => {
-              e.stopPropagation();
-              goToDetail();
-            }}
+            onClick={goToDetail}
             className="inline-flex items-center gap-1 px-3 py-1.5 text-sm font-medium text-gray-700 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors ml-auto"
           >
             View details
@@ -206,7 +194,7 @@ const BookingCard = ({ booking, tab }: BookingCardProps) => {
           </div>
         )}
       </div>
-    </div>
+    </article>
   );
 };
 

@@ -11,6 +11,7 @@ import {
   LoginPage,
   RegisterPage,
   MyTripsPage,
+  BookingDetailPlaceholder,
 } from '@/pages';
 import { useAuth } from '@/hooks';
 
@@ -66,6 +67,14 @@ function App() {
               element={
                 <RequireAuth>
                   <MyTripsPage />
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="/bookings/:id"
+              element={
+                <RequireAuth>
+                  <BookingDetailPlaceholder />
                 </RequireAuth>
               }
             />

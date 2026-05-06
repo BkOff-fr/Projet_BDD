@@ -8,3 +8,4 @@ export { Messages } from './Messages';
 export { LoginPage } from './LoginPage';
 export { RegisterPage } from './RegisterPage';
 export { MyTripsPage } from './MyTripsPage';
+export { BookingDetailPlaceholder } from './BookingDetailPlaceholder';
