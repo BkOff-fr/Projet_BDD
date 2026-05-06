@@ -456,8 +456,7 @@ export const AccommodationDetail = () => {
                 const partialDays = policy.partialRefundDaysBefore;
                 const partialPct = policy.partialRefundPercentage;
 
-                const isNoRefund =
-                  fullDays === 0 && partialDays === 0 && partialPct === 0;
+                const isNoRefund = policy.name === 'no_refund';
                 const isAllOrNothing =
                   !isNoRefund &&
                   (fullDays === partialDays || partialPct === 100);
@@ -505,7 +504,7 @@ export const AccommodationDetail = () => {
                             <X className="w-5 h-5 text-red-600 flex-shrink-0" />
                             <div className="flex-1 flex items-center justify-between">
                               <span className="text-gray-800 text-sm">
-                                Less than {fullDays} days before check-in
+                                Less than {partialDays} days before check-in
                               </span>
                               <span className="font-semibold text-red-700 text-sm">
                                 0% refund
@@ -527,7 +526,7 @@ export const AccommodationDetail = () => {
                             </div>
                           </div>
                           <div className="flex items-center gap-3 p-3 rounded-lg bg-yellow-50 border border-yellow-100">
-                            <Shield className="w-5 h-5 text-yellow-600 flex-shrink-0" />
+                            <Shield className="w-5 h-5 text-yellow-700 flex-shrink-0" />
                             <div className="flex-1 flex items-center justify-between">
                               <span className="text-gray-800 text-sm">
                                 Cancel ≥ {partialDays} days before check-in
