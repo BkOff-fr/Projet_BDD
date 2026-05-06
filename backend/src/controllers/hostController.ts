@@ -95,12 +95,13 @@ export const getHostDashboard = asyncHandler(async (req: AuthRequest, res: Respo
   // Normalize aggregate rows: mysql2 may return COUNT/SUM as strings (DECIMAL
   // category). Coerce to plain numbers at the controller boundary so the wire
   // shape and frontend types stay clean (no `number | string` ambiguity).
+  const rawProperties = (propertiesResult as any[])[0];
   const rawBookings = (bookingsResult as any[])[0];
   const rawEarnings = (earningsResult as any[])[0];
 
   res.json({
     properties: {
-      total: (propertiesResult as any[])[0].total,
+      total: Number(rawProperties.total),
     },
     bookings: {
       total: Number(rawBookings.total),
@@ -125,17 +126,28 @@ export const getHostDashboard = asyncHandler(async (req: AuthRequest, res: Respo
 export const getHostProperties = asyncHandler(async (req: AuthRequest, res: Response): Promise<void> => {
   const hostId = req.user!.id;
 
+  // Hosts see ALL their listings (validated or not) — useful to know which
+  // listings are still pending platform approval (§ 4e) or missing the
+  // mandatory alarm system (§ 4d).
   const [rows] = await pool.execute(
     `SELECT a.*,
-            (SELECT AVG(r.rating) FROM reviews r 
-             JOIN bookings b ON r.booking_id = b.id 
+            cp.name as cancellation_policy_name,
+            (SELECT AVG(r.rating) FROM reviews r
+             JOIN bookings b ON r.booking_id = b.id
              WHERE b.accommodation_id = a.id) as avg_rating,
-            (SELECT COUNT(*) FROM reviews r 
-             JOIN bookings b ON r.booking_id = b.id 
+            (SELECT COUNT(*) FROM reviews r
+             JOIN bookings b ON r.booking_id = b.id
              WHERE b.accommodation_id = a.id) as review_count,
-            (SELECT COUNT(*) FROM bookings b 
-             WHERE b.accommodation_id = a.id AND b.status IN ('pending', 'confirmed')) as active_bookings
+            (SELECT COUNT(*) FROM bookings b
+             WHERE b.accommodation_id = a.id AND b.status IN ('pending', 'confirmed')) as active_bookings,
+            CASE
+              WHEN NOT a.has_alarm_system THEN 'missing_alarm'
+              WHEN NOT a.is_validated     THEN 'pending_validation'
+              WHEN NOT a.is_active        THEN 'inactive'
+              ELSE 'live'
+            END as listing_status
      FROM accommodations a
+     LEFT JOIN cancellation_policies cp ON a.cancellation_policy_id = cp.id
      WHERE a.host_id = ?
      ORDER BY a.created_at DESC`,
     [hostId]

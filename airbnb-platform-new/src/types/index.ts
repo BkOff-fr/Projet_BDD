@@ -150,8 +150,8 @@ export interface Accommodation {
   beds: number;
   bathrooms: number;
   pricePerNight: number;
-  cleaningFee: number | null;
-  serviceFee: number | null;
+  cleaningFee: { amount: number; isPercentage: boolean } | null;
+  serviceFee: { amount: number; isPercentage: boolean } | null;
   minimumNights: number;
   maximumNights: number | null;
   instantBook: boolean;

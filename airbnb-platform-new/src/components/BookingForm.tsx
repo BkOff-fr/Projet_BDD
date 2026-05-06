@@ -224,13 +224,27 @@ export const BookingForm = ({ accommodation, onSubmit, className }: BookingFormP
               </span>
             </div>
             <div className="flex justify-between">
-              <span className="text-gray-700 underline">Cleaning fee</span>
+              <span className="text-gray-700 underline">
+                Cleaning fee
+                {accommodation.cleaningFee?.isPercentage && (
+                  <span className="ml-1 text-gray-500 no-underline">
+                    ({accommodation.cleaningFee.amount}%)
+                  </span>
+                )}
+              </span>
               <span className="text-gray-700">
                 {formatCurrency(pricing.cleaningFee)}
               </span>
             </div>
             <div className="flex justify-between">
-              <span className="text-gray-700 underline">Service fee</span>
+              <span className="text-gray-700 underline">
+                Service fee
+                {accommodation.serviceFee?.isPercentage && (
+                  <span className="ml-1 text-gray-500 no-underline">
+                    ({accommodation.serviceFee.amount}%)
+                  </span>
+                )}
+              </span>
               <span className="text-gray-700">
                 {formatCurrency(pricing.serviceFee)}
               </span>

@@ -36,6 +36,35 @@ interface HostDashboardProps {
   user: User;
 }
 
+// Visual status pulled from `HostProperty.listing_status` (computed server-side
+// in `getHostProperties`). Tells the host why a listing is or isn't bookable
+// — meets § 4d (security) + § 4e (validation gate).
+const LISTING_STATUS_BADGES: Record<
+  HostProperty['listing_status'],
+  { label: string; className: string; tooltip: string }
+> = {
+  live: {
+    label: 'Live',
+    className: 'bg-green-100 text-green-700',
+    tooltip: 'Bookable by guests.',
+  },
+  pending_validation: {
+    label: 'Pending validation',
+    className: 'bg-yellow-100 text-yellow-700',
+    tooltip: 'Waiting for platform staff to validate this listing.',
+  },
+  missing_alarm: {
+    label: 'Alarm required',
+    className: 'bg-red-100 text-red-700',
+    tooltip: 'Install an alarm system before this listing can be validated.',
+  },
+  inactive: {
+    label: 'Inactive',
+    className: 'bg-gray-100 text-gray-600',
+    tooltip: 'You have deactivated this listing.',
+  },
+};
+
 export const HostDashboard = ({ user }: HostDashboardProps) => {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<
@@ -93,7 +122,7 @@ export const HostDashboard = ({ user }: HostDashboardProps) => {
     { id: 'earnings' as const, label: 'Earnings', icon: DollarSign },
   ];
 
-  const handleCreateListing = (_propertyData: Partial<Accommodation>) => {
+  const handleCreateListing = (_propertyData: unknown) => {
     // TODO: wire to accommodationsAPI.create when the form's payload shape
     // matches `CreateAccommodationInput`. See P0 task list.
     setShowPropertyForm(false);
@@ -356,6 +385,9 @@ export const HostDashboard = ({ user }: HostDashboardProps) => {
                       const avg = listing.avg_rating
                         ? Number(listing.avg_rating)
                         : null;
+                      const statusBadge = LISTING_STATUS_BADGES[
+                        listing.listing_status
+                      ] ?? LISTING_STATUS_BADGES.live;
                       return (
                         <div
                           key={listing.id}
@@ -374,6 +406,15 @@ export const HostDashboard = ({ user }: HostDashboardProps) => {
                               </span>
                               <span className="text-gray-500">
                                 ({listing.review_count} reviews)
+                              </span>
+                              <span
+                                className={cn(
+                                  'ml-2 text-xs px-2 py-0.5 rounded-full font-medium',
+                                  statusBadge.className
+                                )}
+                                title={statusBadge.tooltip}
+                              >
+                                {statusBadge.label}
                               </span>
                             </div>
                             <p className="font-semibold text-gray-900">

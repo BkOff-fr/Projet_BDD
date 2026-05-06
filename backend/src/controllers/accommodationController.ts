@@ -8,7 +8,7 @@ import { AuthRequest } from '../middleware/auth';
 const createAccommodationSchema = z.object({
   title: z.string().min(1),
   description: z.string().min(1),
-  type: z.enum(['apartment', 'house', 'villa', 'condo', 'cabin', 'guesthouse']),
+  type: z.enum(['apartment', 'house', 'villa', 'condo', 'cabin', 'guesthouse', 'studio', 'private_room']),
   address: z.string().min(1),
   city: z.string().min(1),
   country: z.string().min(1),
@@ -26,6 +26,9 @@ const createAccommodationSchema = z.object({
   instantBook: z.boolean().default(false),
   houseRules: z.string().optional(),
   amenityIds: z.array(z.number()).optional(),
+  cancellationPolicyId: z.number().int().positive(),
+  hasAlarmSystem: z.boolean().default(false),
+  hasSmokeDetector: z.boolean().default(false),
 });
 
 // Get all accommodations with filters
@@ -41,19 +44,23 @@ export const getAccommodations = asyncHandler(async (req: Request, res: Response
   } = req.query;
 
   let query = `
-    SELECT a.*, 
-           u.first_name as host_first_name, 
+    SELECT a.*,
+           u.first_name as host_first_name,
            u.last_name as host_last_name,
            u.profile_picture as host_picture,
-           (SELECT AVG(r.rating) FROM reviews r 
-            JOIN bookings b ON r.booking_id = b.id 
+           cp.name as cancellation_policy_name,
+           (SELECT AVG(r.rating) FROM reviews r
+            JOIN bookings b ON r.booking_id = b.id
             WHERE b.accommodation_id = a.id) as avg_rating,
-           (SELECT COUNT(*) FROM reviews r 
-            JOIN bookings b ON r.booking_id = b.id 
+           (SELECT COUNT(*) FROM reviews r
+            JOIN bookings b ON r.booking_id = b.id
             WHERE b.accommodation_id = a.id) as review_count
     FROM accommodations a
     JOIN users u ON a.host_id = u.id
+    JOIN cancellation_policies cp ON a.cancellation_policy_id = cp.id
     WHERE a.is_active = true
+      AND a.is_validated = true
+      AND a.has_alarm_system = true
   `;
   
   const params: any[] = [];
@@ -101,16 +108,24 @@ export const getAccommodations = asyncHandler(async (req: Request, res: Response
 
   const [rows] = await pool.execute(query, params);
   
-  // Get amenities for each accommodation
+  // Get amenities and fees for each accommodation
   const accommodations = await Promise.all((rows as any[]).map(async (acc) => {
     const [amenityRows] = await pool.execute(
-      `SELECT am.id, am.name, am.category, am.icon 
+      `SELECT am.id, am.name, am.category, am.icon
        FROM amenities am
        JOIN accommodation_amenities aa ON am.id = aa.amenity_id
        WHERE aa.accommodation_id = ?`,
       [acc.id]
     );
-    
+
+    const [feeRows] = await pool.execute(
+      `SELECT fee_type, amount, is_percentage FROM accommodation_fees WHERE accommodation_id = ?`,
+      [acc.id]
+    );
+    const fees = feeRows as any[];
+    const cleaning = fees.find(f => f.fee_type === 'cleaning');
+    const service  = fees.find(f => f.fee_type === 'service');
+
     return {
       id: acc.id,
       title: acc.title,
@@ -133,18 +148,26 @@ export const getAccommodations = asyncHandler(async (req: Request, res: Response
       bedrooms: acc.bedrooms,
       beds: acc.beds,
       bathrooms: acc.bathrooms,
-      pricePerNight: acc.price_per_night,
-      cleaningFee: acc.cleaning_fee,
-      serviceFee: acc.service_fee,
+      pricePerNight: parseFloat(acc.price_per_night),
+      cleaningFee: cleaning ? { amount: parseFloat(cleaning.amount), isPercentage: !!cleaning.is_percentage } : null,
+      serviceFee:  service  ? { amount: parseFloat(service.amount),  isPercentage: !!service.is_percentage  } : null,
       minimumNights: acc.minimum_nights,
       maximumNights: acc.maximum_nights,
       instantBook: acc.instant_book,
       houseRules: acc.house_rules,
+      isValidated: !!acc.is_validated,
+      hasAlarmSystem: !!acc.has_alarm_system,
+      hasSmokeDetector: !!acc.has_smoke_detector,
+      cancellationPolicy: {
+        id: acc.cancellation_policy_id,
+        name: acc.cancellation_policy_name,
+      },
       rating: {
         average: acc.avg_rating ? parseFloat(acc.avg_rating) : null,
         count: acc.review_count || 0,
       },
       amenities: amenityRows,
+      fees,
       createdAt: acc.created_at,
     };
   }));
@@ -157,19 +180,28 @@ export const getAccommodationById = asyncHandler(async (req: Request, res: Respo
   const { id } = req.params;
 
   const [rows] = await pool.execute(
-    `SELECT a.*, 
-            u.first_name as host_first_name, 
+    `SELECT a.*,
+            u.first_name as host_first_name,
             u.last_name as host_last_name,
             u.profile_picture as host_picture,
-            (SELECT AVG(r.rating) FROM reviews r 
-             JOIN bookings b ON r.booking_id = b.id 
+            cp.name as cancellation_policy_name,
+            cp.description as cancellation_policy_description,
+            cp.full_refund_days_before,
+            cp.partial_refund_days_before,
+            cp.partial_refund_percentage,
+            (SELECT AVG(r.rating) FROM reviews r
+             JOIN bookings b ON r.booking_id = b.id
              WHERE b.accommodation_id = a.id) as avg_rating,
-            (SELECT COUNT(*) FROM reviews r 
-             JOIN bookings b ON r.booking_id = b.id 
+            (SELECT COUNT(*) FROM reviews r
+             JOIN bookings b ON r.booking_id = b.id
              WHERE b.accommodation_id = a.id) as review_count
      FROM accommodations a
      JOIN users u ON a.host_id = u.id
-     WHERE a.id = ? AND a.is_active = true`,
+     JOIN cancellation_policies cp ON a.cancellation_policy_id = cp.id
+     WHERE a.id = ?
+       AND a.is_active = true
+       AND a.is_validated = true
+       AND a.has_alarm_system = true`,
     [id]
   );
 
@@ -191,16 +223,25 @@ export const getAccommodationById = asyncHandler(async (req: Request, res: Respo
     [acc.id]
   );
 
-  // Get reviews
+  // Get reviews — reviewer derived via booking.guest_id
   const [reviewRows] = await pool.execute(
     `SELECT r.*, u.first_name, u.last_name, u.profile_picture
      FROM reviews r
      JOIN bookings b ON r.booking_id = b.id
-     JOIN users u ON r.reviewer_id = u.id
+     JOIN users u ON b.guest_id = u.id
      WHERE b.accommodation_id = ?
      ORDER BY r.created_at DESC`,
     [acc.id]
   );
+
+  // Get fees
+  const [feeRows] = await pool.execute(
+    `SELECT fee_type, amount, is_percentage FROM accommodation_fees WHERE accommodation_id = ?`,
+    [acc.id]
+  );
+  const fees = feeRows as any[];
+  const cleaning = fees.find(f => f.fee_type === 'cleaning');
+  const service  = fees.find(f => f.fee_type === 'service');
 
   res.json({
     id: acc.id,
@@ -224,13 +265,24 @@ export const getAccommodationById = asyncHandler(async (req: Request, res: Respo
     bedrooms: acc.bedrooms,
     beds: acc.beds,
     bathrooms: acc.bathrooms,
-    pricePerNight: acc.price_per_night,
-    cleaningFee: acc.cleaning_fee,
-    serviceFee: acc.service_fee,
+    pricePerNight: parseFloat(acc.price_per_night),
+    cleaningFee: cleaning ? { amount: parseFloat(cleaning.amount), isPercentage: !!cleaning.is_percentage } : null,
+    serviceFee:  service  ? { amount: parseFloat(service.amount),  isPercentage: !!service.is_percentage  } : null,
     minimumNights: acc.minimum_nights,
     maximumNights: acc.maximum_nights,
     instantBook: acc.instant_book,
     houseRules: acc.house_rules,
+    isValidated: !!acc.is_validated,
+    hasAlarmSystem: !!acc.has_alarm_system,
+    hasSmokeDetector: !!acc.has_smoke_detector,
+    cancellationPolicy: {
+      id: acc.cancellation_policy_id,
+      name: acc.cancellation_policy_name,
+      description: acc.cancellation_policy_description,
+      fullRefundDaysBefore: acc.full_refund_days_before,
+      partialRefundDaysBefore: acc.partial_refund_days_before,
+      partialRefundPercentage: parseFloat(acc.partial_refund_percentage),
+    },
     rating: {
       average: acc.avg_rating ? parseFloat(acc.avg_rating) : null,
       count: acc.review_count || 0,
@@ -264,21 +316,41 @@ export const createAccommodation = asyncHandler(async (req: AuthRequest, res: Re
   const data = createAccommodationSchema.parse(req.body);
   const hostId = req.user!.id;
 
+  // New listings start unvalidated. Platform staff must approve them
+  // explicitly (UPDATE ... SET is_validated = TRUE), and the schema CHECK
+  // forbids that without an alarm system.
   const [result] = await pool.execute(
-    `INSERT INTO accommodations 
-     (host_id, title, description, type, address, city, country, latitude, longitude,
-      max_guests, bedrooms, beds, bathrooms, price_per_night, cleaning_fee, service_fee,
-      minimum_nights, maximum_nights, instant_book, house_rules, is_active, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, true, NOW(), NOW())`,
+    `INSERT INTO accommodations
+     (host_id, cancellation_policy_id, title, description, type, address, city, country,
+      latitude, longitude, max_guests, bedrooms, beds, bathrooms, price_per_night,
+      minimum_nights, maximum_nights, instant_book, house_rules,
+      is_active, is_validated, has_alarm_system, has_smoke_detector, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, true, false, ?, ?, NOW(), NOW())`,
     [
-      hostId, data.title, data.description, data.type, data.address, data.city, data.country,
+      hostId, data.cancellationPolicyId, data.title, data.description, data.type,
+      data.address, data.city, data.country,
       data.latitude || null, data.longitude || null, data.maxGuests, data.bedrooms, data.beds,
-      data.bathrooms, data.pricePerNight, data.cleaningFee || null, data.serviceFee || null,
+      data.bathrooms, data.pricePerNight,
       data.minimumNights, data.maximumNights || null, data.instantBook, data.houseRules || null,
+      data.hasAlarmSystem, data.hasSmokeDetector,
     ]
   );
 
   const accommodationId = (result as any).insertId;
+
+  // Insert fees in dedicated table
+  if (data.cleaningFee != null) {
+    await pool.execute(
+      `INSERT INTO accommodation_fees (accommodation_id, fee_type, amount, is_percentage) VALUES (?, 'cleaning', ?, FALSE)`,
+      [accommodationId, data.cleaningFee]
+    );
+  }
+  if (data.serviceFee != null) {
+    await pool.execute(
+      `INSERT INTO accommodation_fees (accommodation_id, fee_type, amount, is_percentage) VALUES (?, 'service', ?, TRUE)`,
+      [accommodationId, data.serviceFee]
+    );
+  }
 
   // Add amenities if provided
   if (data.amenityIds && data.amenityIds.length > 0) {
@@ -298,4 +370,24 @@ export const createAccommodation = asyncHandler(async (req: AuthRequest, res: Re
 export const getAmenities = asyncHandler(async (req: Request, res: Response): Promise<void> => {
   const [rows] = await pool.execute('SELECT * FROM amenities ORDER BY category, name');
   res.json(rows);
+});
+
+// Get all cancellation policies (for the host listing form).
+// Transformed to camelCase so the wire shape matches Accommodation.cancellationPolicy.
+export const getCancellationPolicies = asyncHandler(async (req: Request, res: Response): Promise<void> => {
+  const [rows] = await pool.execute(
+    `SELECT id, name, description, full_refund_days_before,
+            partial_refund_days_before, partial_refund_percentage
+     FROM cancellation_policies
+     ORDER BY full_refund_days_before DESC`
+  );
+  const policies = (rows as any[]).map(p => ({
+    id: p.id,
+    name: p.name,
+    description: p.description,
+    fullRefundDaysBefore: p.full_refund_days_before,
+    partialRefundDaysBefore: p.partial_refund_days_before,
+    partialRefundPercentage: parseFloat(p.partial_refund_percentage),
+  }));
+  res.json(policies);
 });

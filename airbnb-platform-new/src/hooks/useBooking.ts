@@ -28,7 +28,7 @@ export const useBooking = ({ accommodation }: UseBookingProps) => {
       pets: 0,
     },
   });
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isSubmitting] = useState(false);
 
   const nights = useMemo(() => {
     if (formData.checkIn && formData.checkOut) {
@@ -47,9 +47,19 @@ export const useBooking = ({ accommodation }: UseBookingProps) => {
       };
     }
 
+    // Fees may be flat dollar amounts OR percentages of the subtotal — the
+    // backend exposes `{ amount, isPercentage }` so the frontend can resolve
+    // the actual dollar value the same way `bookingController.createBooking`
+    // does on the server. Display the resolved amount in price breakdowns.
     const subtotal = accommodation.pricePerNight * nights;
-    const cleaningFee = accommodation.cleaningFee ?? 0;
-    const serviceFee = accommodation.serviceFee ?? 0;
+    const resolveFee = (
+      fee: { amount: number; isPercentage: boolean } | null
+    ): number => {
+      if (!fee) return 0;
+      return fee.isPercentage ? (subtotal * fee.amount) / 100 : fee.amount;
+    };
+    const cleaningFee = resolveFee(accommodation.cleaningFee);
+    const serviceFee = resolveFee(accommodation.serviceFee);
     const total = subtotal + cleaningFee + serviceFee;
 
     return {
@@ -88,35 +98,14 @@ export const useBooking = ({ accommodation }: UseBookingProps) => {
   }, []);
 
   /**
-   * Creates a booking and returns its id (or null if invalid). The actual
-   * API call is wired up in P0-T3+; for now this is a stub that just
-   * surfaces the validated form state so components can navigate to the
-   * confirmation page. When the real API is wired, this will call
-   * `bookingsAPI.create({ ... })`.
+   * Reserved for a future direct-booking flow. Today, the actual booking is
+   * created from `BookingConfirmation.tsx` via `bookingsAPI.create(...)` —
+   * this hook only surfaces validated form state. Kept on the returned API
+   * so callers don't need to change when that direct flow lands.
    */
-  const createBooking = useCallback(async (): Promise<{
-    accommodationId: number;
-    checkIn: Date;
-    checkOut: Date;
-    guests: BookingFormData['guests'];
-    nights: number;
-    totalPrice: number;
-  } | null> => {
-    if (!isValid) return null;
-
-    setIsSubmitting(true);
-    await new Promise((resolve) => setTimeout(resolve, 800));
-    setIsSubmitting(false);
-
-    return {
-      accommodationId: accommodation.id,
-      checkIn: formData.checkIn!,
-      checkOut: formData.checkOut!,
-      guests: formData.guests,
-      nights,
-      totalPrice: pricing.total,
-    };
-  }, [isValid, accommodation, formData, nights, pricing.total]);
+  const createBooking = useCallback(async () => {
+    return null;
+  }, []);
 
   return {
     formData,

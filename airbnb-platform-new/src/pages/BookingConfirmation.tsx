@@ -69,9 +69,18 @@ export const BookingConfirmation = () => {
   }
 
   const nights = calculateNights(bookingData.checkIn, bookingData.checkOut);
-  const cleaningFee = accommodation.cleaningFee ?? 0;
-  const serviceFee = accommodation.serviceFee ?? 0;
   const subtotal = accommodation.pricePerNight * nights;
+  // Fees may be flat dollar amounts OR percentages — resolve to the actual
+  // dollar value the same way `bookingController.createBooking` does so the
+  // displayed total matches what gets charged.
+  const resolveFee = (
+    fee: { amount: number; isPercentage: boolean } | null
+  ): number => {
+    if (!fee) return 0;
+    return fee.isPercentage ? (subtotal * fee.amount) / 100 : fee.amount;
+  };
+  const cleaningFee = resolveFee(accommodation.cleaningFee);
+  const serviceFee = resolveFee(accommodation.serviceFee);
   const total = subtotal + cleaningFee + serviceFee;
   const numGuests =
     bookingData.guests.adults +
@@ -320,6 +329,11 @@ export const BookingConfirmation = () => {
                     <div className="flex justify-between">
                       <span className="text-gray-700 underline">
                         Cleaning fee
+                        {accommodation.cleaningFee?.isPercentage && (
+                          <span className="ml-1 text-gray-500 no-underline">
+                            ({accommodation.cleaningFee.amount}%)
+                          </span>
+                        )}
                       </span>
                       <span className="text-gray-700">
                         {formatCurrency(cleaningFee)}
@@ -328,6 +342,11 @@ export const BookingConfirmation = () => {
                     <div className="flex justify-between">
                       <span className="text-gray-700 underline">
                         Service fee
+                        {accommodation.serviceFee?.isPercentage && (
+                          <span className="ml-1 text-gray-500 no-underline">
+                            ({accommodation.serviceFee.amount}%)
+                          </span>
+                        )}
                       </span>
                       <span className="text-gray-700">
                         {formatCurrency(serviceFee)}
