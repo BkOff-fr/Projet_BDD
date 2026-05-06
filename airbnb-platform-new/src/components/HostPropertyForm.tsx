@@ -1,17 +1,23 @@
 import { useEffect, useState } from 'react';
-import { Upload, X, ChevronRight, ChevronLeft } from 'lucide-react';
+import { Upload, X, ChevronRight, ChevronLeft, ShieldCheck } from 'lucide-react';
 import { cn } from '@/utils/cn';
 import { accommodationsAPI } from '@/services/api';
+import { Spinner } from './Spinner';
 import type {
   Amenity,
   CreateAccommodationInput,
   AccommodationType,
+  CancellationPolicyDetail,
 } from '@/types';
 
 /**
  * The form drafts a `CreateAccommodationInput` payload. Note: the BDD has
  * no images table; the photo step is a UI placeholder and its values are
  * not part of the input payload sent to the API.
+ *
+ * TODO(P4-T?): when an `images` table is introduced, plumb `images` from
+ * the photos step (step 4) through to the create payload. For now the
+ * field is local-only and is dropped on submission in `handleSubmit`.
  */
 interface HostPropertyFormDraft extends Partial<CreateAccommodationInput> {
   /** Local-only — the API does not currently accept photo URLs. */
@@ -20,8 +26,18 @@ interface HostPropertyFormDraft extends Partial<CreateAccommodationInput> {
 
 interface HostPropertyFormProps {
   property?: HostPropertyFormDraft;
-  onSubmit: (propertyData: HostPropertyFormDraft) => void;
+  /**
+   * Called with the validated `CreateAccommodationInput` payload. Returns a
+   * promise so the parent can `await` the API call and surface errors via
+   * `submitError`. Resolution closes the form (parent's responsibility);
+   * rejection leaves the form open with the error displayed.
+   */
+  onSubmit: (propertyData: CreateAccommodationInput) => Promise<void> | void;
   onCancel: () => void;
+  /** When true, the final submit button shows a spinner and is disabled. */
+  submitting?: boolean;
+  /** Error message to display below the footer if the API rejected. */
+  submitError?: string | null;
 }
 
 const steps = [
@@ -48,19 +64,29 @@ export const HostPropertyForm = ({
   property,
   onSubmit,
   onCancel,
+  submitting = false,
+  submitError = null,
 }: HostPropertyFormProps) => {
   const [currentStep, setCurrentStep] = useState(0);
   const [amenities, setAmenities] = useState<Amenity[]>([]);
+  const [policies, setPolicies] = useState<CancellationPolicyDetail[]>([]);
+  const [validationError, setValidationError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
-    accommodationsAPI
-      .getAmenities()
-      .then((list) => {
-        if (!cancelled) setAmenities(list);
+    Promise.all([
+      accommodationsAPI.getAmenities(),
+      accommodationsAPI.getCancellationPolicies(),
+    ])
+      .then(([amenityList, policyList]) => {
+        if (cancelled) return;
+        setAmenities(amenityList);
+        setPolicies(policyList);
       })
       .catch(() => {
-        if (!cancelled) setAmenities([]);
+        if (cancelled) return;
+        setAmenities([]);
+        setPolicies([]);
       });
     return () => {
       cancelled = true;
@@ -84,9 +110,12 @@ export const HostPropertyForm = ({
       bathrooms: 1,
       minimumNights: 1,
       cancellationPolicyId: 1,
+      hasAlarmSystem: false,
+      hasSmokeDetector: false,
       amenityIds: [],
       images: [],
       instantBook: false,
+      houseRules: '',
     }
   );
 
@@ -117,8 +146,106 @@ export const HostPropertyForm = ({
     }
   };
 
-  const handleSubmit = () => {
-    onSubmit(formData);
+  /**
+   * Build a strict `CreateAccommodationInput` from the draft and forward it
+   * to the parent. Drops local-only fields (`images`) that the API does not
+   * accept, and runs client-side validation that mirrors the backend Zod
+   * schema (see `createAccommodationSchema` in `accommodationController.ts`).
+   * Server-side errors come back via the `submitError` prop.
+   */
+  const handleSubmit = async () => {
+    if (submitting) return;
+    setValidationError(null);
+
+    // Required-field guards mirroring the backend Zod schema.
+    const title = (formData.title ?? '').trim();
+    const description = (formData.description ?? '').trim();
+    const address = (formData.address ?? '').trim();
+    const city = (formData.city ?? '').trim();
+    const country = (formData.country ?? '').trim();
+    if (!title || !description || !address || !city || !country) {
+      setValidationError(
+        'Please fill in title, description, address, city, and country.'
+      );
+      return;
+    }
+    if (!formData.type) {
+      setValidationError('Please select a property type.');
+      return;
+    }
+    if (!formData.cancellationPolicyId) {
+      setValidationError('Please select a cancellation policy.');
+      return;
+    }
+    const maxGuests = Number(formData.maxGuests ?? 0);
+    const bedrooms = Number(formData.bedrooms ?? 0);
+    const beds = Number(formData.beds ?? 0);
+    const bathrooms = Number(formData.bathrooms ?? 0);
+    const pricePerNight = Number(formData.pricePerNight ?? 0);
+    const minimumNights = Number(formData.minimumNights ?? 0);
+    if (
+      !Number.isFinite(maxGuests) ||
+      maxGuests < 1 ||
+      !Number.isFinite(bedrooms) ||
+      bedrooms < 0 ||
+      !Number.isFinite(beds) ||
+      beds < 1 ||
+      !Number.isFinite(bathrooms) ||
+      bathrooms < 0
+    ) {
+      setValidationError(
+        'Check the room details: guests >= 1, beds >= 1, bedrooms/bathrooms >= 0.'
+      );
+      return;
+    }
+    if (!Number.isFinite(pricePerNight) || pricePerNight <= 0) {
+      setValidationError('Price per night must be greater than 0.');
+      return;
+    }
+    if (!Number.isFinite(minimumNights) || minimumNights < 1) {
+      setValidationError('Minimum nights must be at least 1.');
+      return;
+    }
+
+    // Strip local-only fields and undefined optionals before sending. The
+    // backend Zod schema rejects unknown keys via `.parse`, so being explicit
+    // here is safer than spreading the whole draft.
+    const payload: CreateAccommodationInput = {
+      title,
+      description,
+      type: formData.type,
+      address,
+      city,
+      country,
+      maxGuests,
+      bedrooms,
+      beds,
+      bathrooms,
+      pricePerNight,
+      minimumNights,
+      cancellationPolicyId: formData.cancellationPolicyId,
+      instantBook: !!formData.instantBook,
+      hasAlarmSystem: !!formData.hasAlarmSystem,
+      hasSmokeDetector: !!formData.hasSmokeDetector,
+      ...(formData.cleaningFee != null && { cleaningFee: Number(formData.cleaningFee) }),
+      ...(formData.serviceFee != null && { serviceFee: Number(formData.serviceFee) }),
+      ...(formData.maximumNights != null && {
+        maximumNights: Number(formData.maximumNights),
+      }),
+      ...(formData.houseRules && formData.houseRules.trim().length > 0 && {
+        houseRules: formData.houseRules.trim(),
+      }),
+      ...(formData.amenityIds && formData.amenityIds.length > 0 && {
+        amenityIds: formData.amenityIds,
+      }),
+    };
+
+    try {
+      await onSubmit(payload);
+    } catch {
+      // The parent surfaces the message via the `submitError` prop. Swallow
+      // here so React doesn't see an unhandled promise rejection.
+    }
   };
 
   const renderStep = () => {
@@ -167,6 +294,19 @@ export const HostPropertyForm = ({
                   </option>
                 ))}
               </select>
+            </div>
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-2">
+                House Rules{' '}
+                <span className="text-gray-400 font-normal">(optional)</span>
+              </label>
+              <textarea
+                value={formData.houseRules ?? ''}
+                onChange={(e) => updateField('houseRules', e.target.value)}
+                placeholder="e.g., No smoking, no parties, quiet hours after 10pm..."
+                rows={3}
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent resize-none"
+              />
             </div>
           </div>
         );
@@ -276,6 +416,41 @@ export const HostPropertyForm = ({
                   className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
                 />
               </div>
+            </div>
+
+            {/* Security equipment — alarm system is mandatory for the listing
+                to be validated by the platform (cf. backend trigger
+                `trg_booking_validate_before_insert`, § 4d). */}
+            <div className="mt-2 p-4 bg-amber-50 border border-amber-200 rounded-lg">
+              <div className="flex items-center gap-2 mb-3">
+                <ShieldCheck className="w-5 h-5 text-amber-700" />
+                <h4 className="font-semibold text-amber-900">Safety equipment</h4>
+              </div>
+              <p className="text-xs text-amber-800 mb-3">
+                An alarm system is required by the platform to accept bookings.
+              </p>
+              <label className="flex items-center gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={!!formData.hasAlarmSystem}
+                  onChange={(e) =>
+                    updateField('hasAlarmSystem', e.target.checked)
+                  }
+                  className="w-5 h-5 rounded border-gray-300 text-primary focus:ring-primary"
+                />
+                <span className="text-gray-800">Alarm system installed</span>
+              </label>
+              <label className="flex items-center gap-3 cursor-pointer mt-2">
+                <input
+                  type="checkbox"
+                  checked={!!formData.hasSmokeDetector}
+                  onChange={(e) =>
+                    updateField('hasSmokeDetector', e.target.checked)
+                  }
+                  className="w-5 h-5 rounded border-gray-300 text-primary focus:ring-primary"
+                />
+                <span className="text-gray-800">Smoke detector installed</span>
+              </label>
             </div>
           </div>
         );
@@ -403,6 +578,42 @@ export const HostPropertyForm = ({
                 />
               </div>
             </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  Minimum Nights
+                </label>
+                <input
+                  type="number"
+                  value={formData.minimumNights ?? 1}
+                  onChange={(e) =>
+                    updateField('minimumNights', parseInt(e.target.value, 10))
+                  }
+                  min={1}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  Maximum Nights{' '}
+                  <span className="text-gray-400 font-normal">(optional)</span>
+                </label>
+                <input
+                  type="number"
+                  value={formData.maximumNights ?? ''}
+                  onChange={(e) => {
+                    const raw = e.target.value;
+                    updateField(
+                      'maximumNights',
+                      raw === '' ? undefined : parseInt(raw, 10)
+                    );
+                  }}
+                  min={1}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+                />
+              </div>
+            </div>
+
             <label className="flex items-center gap-3 cursor-pointer">
               <input
                 type="checkbox"
@@ -412,6 +623,43 @@ export const HostPropertyForm = ({
               />
               <span className="text-gray-700">Enable Instant Book</span>
             </label>
+
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-2">
+                Cancellation Policy
+              </label>
+              <select
+                value={formData.cancellationPolicyId ?? ''}
+                onChange={(e) =>
+                  updateField(
+                    'cancellationPolicyId',
+                    parseInt(e.target.value, 10)
+                  )
+                }
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+              >
+                {policies.length === 0 && (
+                  <option value="">Loading policies…</option>
+                )}
+                {policies.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name.charAt(0).toUpperCase() + p.name.slice(1)}
+                    {' — '}full refund up to {p.fullRefundDaysBefore}d before
+                  </option>
+                ))}
+              </select>
+              {policies.find(
+                (p) => p.id === formData.cancellationPolicyId
+              )?.description && (
+                <p className="mt-2 text-xs text-gray-500">
+                  {
+                    policies.find(
+                      (p) => p.id === formData.cancellationPolicyId
+                    )?.description
+                  }
+                </p>
+              )}
+            </div>
           </div>
         );
 
@@ -458,10 +706,10 @@ export const HostPropertyForm = ({
       <div className="px-6 py-4 border-t border-gray-200 flex justify-between">
         <button
           onClick={handleBack}
-          disabled={currentStep === 0}
+          disabled={currentStep === 0 || submitting}
           className={cn(
             'flex items-center gap-2 px-6 py-3 rounded-lg font-semibold transition-colors',
-            currentStep === 0
+            currentStep === 0 || submitting
               ? 'text-gray-400 cursor-not-allowed'
               : 'text-gray-700 hover:bg-gray-100'
           )}
@@ -472,8 +720,15 @@ export const HostPropertyForm = ({
         {currentStep === steps.length - 1 ? (
           <button
             onClick={handleSubmit}
-            className="flex items-center gap-2 px-6 py-3 bg-primary text-white rounded-lg font-semibold hover:bg-primary-dark transition-colors"
+            disabled={submitting}
+            className={cn(
+              'flex items-center gap-2 px-6 py-3 bg-primary text-white rounded-lg font-semibold transition-colors',
+              submitting
+                ? 'opacity-70 cursor-not-allowed'
+                : 'hover:bg-primary-dark'
+            )}
           >
+            {submitting && <Spinner className="h-4 w-4" />}
             {property ? 'Save Changes' : 'Create Listing'}
           </button>
         ) : (
@@ -486,6 +741,21 @@ export const HostPropertyForm = ({
           </button>
         )}
       </div>
+
+      {/* Inline error display — shown on validation failure or API
+          rejection. Two distinct sources:
+          - `validationError` is set client-side by `handleSubmit` when a
+            required field is missing or out of range.
+          - `submitError` is the message bubbled up from the parent after a
+            failed `accommodationsAPI.create` call. */}
+      {(validationError || submitError) && (
+        <div
+          role="alert"
+          className="mx-6 mb-4 p-3 bg-red-50 border border-red-200 text-red-800 rounded-lg text-sm"
+        >
+          {validationError ?? submitError}
+        </div>
+      )}
     </div>
   );
 };

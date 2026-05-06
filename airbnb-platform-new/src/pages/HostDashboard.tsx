@@ -18,7 +18,7 @@ import {
   LoadingState,
   ErrorState,
 } from '@/components';
-import { hostAPI } from '@/services/api';
+import { hostAPI, accommodationsAPI } from '@/services/api';
 import { cn } from '@/utils/cn';
 import {
   formatCurrency,
@@ -30,6 +30,7 @@ import type {
   HostDashboardData,
   HostProperty,
   Accommodation,
+  CreateAccommodationInput,
 } from '@/types';
 
 interface HostDashboardProps {
@@ -81,6 +82,15 @@ export const HostDashboard = ({ user }: HostDashboardProps) => {
   const [error, setError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
 
+  // P4-T1: state for the "Create Listing" form submission. `submitting`
+  // disables the form's footer button + shows a spinner. `createError` is
+  // forwarded to the form so its inline error block can render the message.
+  // `createdBanner` is a transient success notice shown above the dashboard;
+  // it auto-dismisses after 3s (mirrors `becameHostBanner` in SettingsPage).
+  const [submitting, setSubmitting] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
+  const [createdBanner, setCreatedBanner] = useState<string | null>(null);
+
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
@@ -102,6 +112,15 @@ export const HostDashboard = ({ user }: HostDashboardProps) => {
     };
   }, [reloadKey]);
 
+  // Auto-dismiss the "listing created" banner after 3s. Matches the
+  // `becameHostBanner` pattern in SettingsPage so the two flows feel
+  // consistent.
+  useEffect(() => {
+    if (!createdBanner) return;
+    const handle = window.setTimeout(() => setCreatedBanner(null), 3000);
+    return () => window.clearTimeout(handle);
+  }, [createdBanner]);
+
   if (loading) {
     return <LoadingState label="Loading host dashboard..." />;
   }
@@ -122,11 +141,48 @@ export const HostDashboard = ({ user }: HostDashboardProps) => {
     { id: 'earnings' as const, label: 'Earnings', icon: DollarSign },
   ];
 
-  const handleCreateListing = (_propertyData: unknown) => {
-    // TODO: wire to accommodationsAPI.create when the form's payload shape
-    // matches `CreateAccommodationInput`. See P0 task list.
-    setShowPropertyForm(false);
-    setEditingProperty(undefined);
+  /**
+   * P4-T1: real submit handler. Posts the validated payload to
+   * `POST /api/accommodations`, then on success closes the modal, shows a
+   * dismissible success banner, and bumps `reloadKey` so the dashboard's
+   * stats and the listings list refetch. On failure the error message is
+   * forwarded to the form via `submitError`; the modal stays open so the
+   * host can correct fields without losing the in-progress draft.
+   *
+   * Edit mode is intentionally still a no-op: the backend has no PATCH
+   * endpoint for accommodations yet, and the existing edit-mode flow only
+   * passed a cast-through-unknown `Accommodation` into the form. Don't
+   * regress what wasn't wired.
+   */
+  const handleCreateListing = async (propertyData: CreateAccommodationInput) => {
+    if (editingProperty) {
+      // Edit mode is not yet wired to a backend endpoint — see comment above.
+      setShowPropertyForm(false);
+      setEditingProperty(undefined);
+      return;
+    }
+    setSubmitting(true);
+    setCreateError(null);
+    try {
+      await accommodationsAPI.create(propertyData);
+      setShowPropertyForm(false);
+      setEditingProperty(undefined);
+      setCreatedBanner(
+        'Listing created! It will be visible to guests after platform validation.'
+      );
+      // Trigger the dashboard refetch so the new listing appears under
+      // "Your Listings" with its `pending_validation` badge.
+      setReloadKey((k) => k + 1);
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : 'Failed to create listing.';
+      setCreateError(message);
+      // Re-throw so the form's `await onSubmit(...)` rejects and any caller
+      // logic can react. The form swallows it after `submitError` is set.
+      throw err;
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const handleEditListing = (property: HostProperty) => {
@@ -171,6 +227,7 @@ export const HostDashboard = ({ user }: HostDashboardProps) => {
           <button
             onClick={() => {
               setEditingProperty(undefined);
+              setCreateError(null);
               setShowPropertyForm(true);
             }}
             className="flex items-center gap-2 px-6 py-3 bg-primary text-white rounded-lg font-semibold hover:bg-primary-dark transition-colors"
@@ -179,6 +236,20 @@ export const HostDashboard = ({ user }: HostDashboardProps) => {
             Create Listing
           </button>
         </div>
+
+        {/* P4-T1: success banner shown after a listing is created. Auto-
+            dismisses after 3s via the effect above. The message reminds the
+            host that a fresh listing is `is_validated: false` until staff
+            approve it (cf. § 4e of the BDD spec) so they don't think the
+            site is broken when their listing isn't yet searchable. */}
+        {createdBanner && (
+          <div
+            role="status"
+            className="mb-6 p-3 bg-green-50 border border-green-200 text-green-800 rounded-lg text-sm"
+          >
+            {createdBanner}
+          </div>
+        )}
 
         {/* Stats Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
@@ -627,9 +698,13 @@ export const HostDashboard = ({ user }: HostDashboardProps) => {
               // the form's edit-mode is reworked against the API shape.
               property={editingProperty as unknown as undefined}
               onSubmit={handleCreateListing}
+              submitting={submitting}
+              submitError={createError}
               onCancel={() => {
+                if (submitting) return; // Don't let the user close mid-submit.
                 setShowPropertyForm(false);
                 setEditingProperty(undefined);
+                setCreateError(null);
               }}
             />
           </div>
