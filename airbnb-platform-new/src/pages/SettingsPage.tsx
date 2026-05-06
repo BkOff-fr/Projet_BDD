@@ -134,21 +134,21 @@ export const SettingsPage = () => {
 
   const isProfileDirty = useMemo(() => {
     return (
-      profileForm.firstName !== profileBaseline.firstName ||
-      profileForm.lastName !== profileBaseline.lastName ||
-      profileForm.phone !== profileBaseline.phone ||
-      profileForm.profilePicture !== profileBaseline.profilePicture
+      profileForm.firstName.trim() !== profileBaseline.firstName.trim() ||
+      profileForm.lastName.trim() !== profileBaseline.lastName.trim() ||
+      profileForm.phone.trim() !== profileBaseline.phone.trim() ||
+      profileForm.profilePicture.trim() !== profileBaseline.profilePicture.trim()
     );
   }, [profileForm, profileBaseline]);
 
   const validateProfile = (form: ProfileFormState): ProfileFieldErrors => {
     const errors: ProfileFieldErrors = {};
-    // Only validate "non-empty if changed" — these fields exist on the User
-    // record and the backend will reject empty strings.
-    if (form.firstName !== profileBaseline.firstName && form.firstName.trim() === '') {
+    // Validate unconditionally; the submit button is gated by isProfileDirty,
+    // so a freshly-loaded pristine profile never reaches this code path.
+    if (form.firstName.trim() === '') {
       errors.firstName = 'First name cannot be empty';
     }
-    if (form.lastName !== profileBaseline.lastName && form.lastName.trim() === '') {
+    if (form.lastName.trim() === '') {
       errors.lastName = 'Last name cannot be empty';
     }
     if (form.profilePicture.trim() !== '' && !isValidUrl(form.profilePicture.trim())) {
