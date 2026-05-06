@@ -289,7 +289,11 @@ export const MyTripsPage = () => {
     };
   }, [reloadKey]);
 
-  const partitioned = useMemo(() => partition(bookings, todayISO()), [bookings]);
+  // Compute today on every render (cheap) so it's a tracked memo dependency.
+  // Without this, a page kept open across midnight UTC could miscategorize
+  // bookings when `bookings` re-fetches but the memo's stale closure runs.
+  const today = todayISO();
+  const partitioned = useMemo(() => partition(bookings, today), [bookings, today]);
 
   if (loading) {
     return <LoadingState label="Loading your trips..." />;
