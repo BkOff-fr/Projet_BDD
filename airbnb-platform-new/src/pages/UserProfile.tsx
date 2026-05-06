@@ -163,6 +163,7 @@ export const UserProfile = ({ user }: UserProfileProps) => {
                   </div>
                 </div>
 
+                {/* TODO: /settings route not yet implemented — see SettingsPage in P2 plan */}
                 <button
                   onClick={() => navigate('/settings')}
                   className="w-full mt-6 px-4 py-2 border border-gray-900 rounded-lg font-semibold text-gray-900 hover:bg-gray-50 transition-colors flex items-center justify-center gap-2"
@@ -220,6 +221,7 @@ export const UserProfile = ({ user }: UserProfileProps) => {
                       <span className="text-gray-700">Host Dashboard</span>
                     </Link>
                   )}
+                  {/* TODO: /settings route not yet implemented — see SettingsPage in P2 plan */}
                   <Link
                     to="/settings"
                     className="flex items-center gap-3 p-2 rounded-lg hover:bg-gray-50 transition-colors"
@@ -271,6 +273,7 @@ export const UserProfile = ({ user }: UserProfileProps) => {
                     <p className="text-gray-600 mb-3">
                       Tell other guests and hosts a little about yourself.
                     </p>
+                    {/* TODO: /settings route not yet implemented — see SettingsPage in P2 plan */}
                     <button
                       onClick={() => navigate('/settings')}
                       className="px-4 py-2 border border-gray-900 rounded-lg font-semibold text-gray-900 hover:bg-gray-50 transition-colors"

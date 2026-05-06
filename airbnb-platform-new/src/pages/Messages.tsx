@@ -42,6 +42,7 @@ export const Messages = ({ currentUser: _currentUser }: MessagesProps) => {
   const [loading, setLoading] = useState(true);
   const [threadLoading, setThreadLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [sendError, setSendError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
 
   // Load conversations once on mount.
@@ -72,6 +73,9 @@ export const Messages = ({ currentUser: _currentUser }: MessagesProps) => {
 
   // Load the selected conversation thread whenever the selection changes.
   useEffect(() => {
+    // Clear any prior send error when switching conversations so it doesn't
+    // leak across threads.
+    setSendError(null);
     if (!selectedConversation) {
       setMessages([]);
       setOtherUser(null);
@@ -114,15 +118,23 @@ export const Messages = ({ currentUser: _currentUser }: MessagesProps) => {
         accommodationId: selectedConversation.accommodation?.id,
         content,
       });
+      // Send succeeded — clear any prior error and refetch the thread.
       // TODO: optimistic update — for now just refetch the thread.
+      setSendError(null);
       const refreshed = await messagesAPI.getConversation(
         selectedConversation.otherUser.id
       );
       setMessages(refreshed.messages);
-    } catch {
-      // The MessageThread input clears on send; surface a soft inline error
-      // by re-fetching the conversations list to refresh state. (No toast
-      // system in P0 — TODO: add one.)
+    } catch (e) {
+      // Send failed. The MessageThread input has already cleared optimistically
+      // (current UX, see P0-T5 review note); surface the failure inline so the
+      // user knows their message was lost and can retype.
+      // TODO: defer input clear until promise resolves so retries are seamless.
+      const message =
+        e instanceof Error
+          ? e.message
+          : 'Failed to send message';
+      setSendError(message || 'Failed to send message');
     }
   };
 
@@ -320,11 +332,32 @@ export const Messages = ({ currentUser: _currentUser }: MessagesProps) => {
                     className="flex-1 flex items-center justify-center"
                   />
                 ) : (
-                  <MessageThread
-                    messages={messages}
-                    otherUser={otherUser}
-                    onSendMessage={handleSendMessage}
-                  />
+                  <>
+                    {sendError && (
+                      <div
+                        role="alert"
+                        className="mx-4 mt-2 px-3 py-2 rounded-md bg-red-50 border border-red-200 text-sm text-red-600 flex items-start justify-between gap-3"
+                      >
+                        <span>
+                          Couldn&apos;t send your message: {sendError}. Please
+                          try again.
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setSendError(null)}
+                          className="text-red-600 hover:text-red-800 font-semibold shrink-0"
+                          aria-label="Dismiss error"
+                        >
+                          Dismiss
+                        </button>
+                      </div>
+                    )}
+                    <MessageThread
+                      messages={messages}
+                      otherUser={otherUser}
+                      onSendMessage={handleSendMessage}
+                    />
+                  </>
                 )}
               </>
             ) : (
