@@ -76,13 +76,24 @@ const StarSelector = ({
     >
       {[1, 2, 3, 4, 5].map((n) => {
         const filled = n <= display;
+        // Only one star per row participates in the Tab order: the currently
+        // selected star, or the first star if no value is set yet. This keeps
+        // total Tab stops manageable (7 selectors x 1 stop instead of x 5).
+        // The other stars remain reachable via mouse and programmatic .focus().
+        const isInTabOrder = value === 0 ? n === 1 : n === value;
         return (
           <button
             key={n}
             ref={n === 1 ? firstStarRef : undefined}
             type="button"
+            tabIndex={isInTabOrder ? 0 : -1}
             onClick={() => onChange(n)}
             onMouseEnter={() => setHovered(n)}
+            // Hover state is driven by both pointer (onMouseEnter/onMouseLeave)
+            // and keyboard (onFocus/onBlur) events to keep the preview
+            // consistent across input modes. On click, focus and click events
+            // fire in sequence; hovered === value at that point so the visual
+            // remains stable.
             onFocus={() => setHovered(n)}
             onBlur={() => setHovered(0)}
             disabled={disabled}

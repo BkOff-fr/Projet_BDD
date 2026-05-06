@@ -77,6 +77,8 @@ export const BookingDetailPage = () => {
   const location = useLocation();
   const stateBooking = (location.state as { booking?: Booking } | null)?.booking;
 
+  // Initial state from location.state for fast load. The state is cleared in
+  // a separate effect so back-navigation re-fetches fresh data.
   const [booking, setBooking] = useState<Booking | null>(stateBooking ?? null);
   // We only need to fetch when we don't already have the booking from
   // navigation state. `notFound` distinguishes the success-but-empty case
@@ -87,6 +89,18 @@ export const BookingDetailPage = () => {
   const [reloadKey, setReloadKey] = useState(0);
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [showReviewModal, setShowReviewModal] = useState(false);
+
+  // Consume location.state once on mount and clear it. Without this, navigating
+  // back via browser history would restore the original (now stale) booking
+  // snapshot — e.g. hasReview: false even after the user submitted a review and
+  // we optimistically flipped the local flag. Clearing forces the API-fallback
+  // path on subsequent visits, which fetches fresh data.
+  useEffect(() => {
+    if (stateBooking) {
+      window.history.replaceState({}, '');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     // If we already have the booking from navigation state and the URL id
