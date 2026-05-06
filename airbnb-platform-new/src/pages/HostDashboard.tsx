@@ -492,6 +492,18 @@ export const HostDashboard = ({ user }: HostDashboardProps) => {
                               <Eye className="w-5 h-5" />
                             </button>
                             <button
+                              onClick={() =>
+                                navigate(
+                                  `/host/properties/${listing.id}/calendar`
+                                )
+                              }
+                              className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg"
+                              title="Manage availability calendar"
+                              aria-label={`Manage calendar for ${listing.title}`}
+                            >
+                              <Calendar className="w-5 h-5" />
+                            </button>
+                            <button
                               disabled
                               title="Editing coming soon"
                               className="p-2 text-gray-400 rounded-lg cursor-not-allowed"
