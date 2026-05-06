@@ -11,7 +11,7 @@ import {
   LoginPage,
   RegisterPage,
   MyTripsPage,
-  BookingDetailPlaceholder,
+  BookingDetailPage,
 } from '@/pages';
 import { useAuth } from '@/hooks';
 
@@ -74,7 +74,7 @@ function App() {
               path="/bookings/:id"
               element={
                 <RequireAuth>
-                  <BookingDetailPlaceholder />
+                  <BookingDetailPage />
                 </RequireAuth>
               }
             />

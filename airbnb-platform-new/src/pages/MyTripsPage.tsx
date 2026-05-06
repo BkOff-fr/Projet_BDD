@@ -9,7 +9,7 @@ import {
   Star,
   ChevronRight,
 } from 'lucide-react';
-import { LoadingState, ErrorState } from '@/components';
+import { CancelBookingModal, LoadingState, ErrorState } from '@/components';
 import { bookingsAPI } from '@/services/api';
 import { cn } from '@/utils/cn';
 import {
@@ -84,11 +84,15 @@ const partition = (
 interface BookingCardProps {
   booking: Booking;
   tab: TripTab;
+  onCancelClick: (booking: Booking) => void;
 }
 
-const BookingCard = ({ booking, tab }: BookingCardProps) => {
+const BookingCard = ({ booking, tab, onCancelClick }: BookingCardProps) => {
   const navigate = useNavigate();
-  const goToDetail = () => navigate(`/bookings/${booking.id}`);
+  // Pass the booking through navigation state so BookingDetailPage can render
+  // immediately without re-fetching the list (state-first / API-fallback).
+  const goToDetail = () =>
+    navigate(`/bookings/${booking.id}`, { state: { booking } });
 
   const { accommodation } = booking;
   const hostName = `${accommodation.host.firstName} ${accommodation.host.lastName}`.trim();
@@ -152,12 +156,7 @@ const BookingCard = ({ booking, tab }: BookingCardProps) => {
         <div className="flex flex-wrap items-center gap-2 mt-3">
           {tab === 'upcoming' && (
             <button
-              onClick={() => {
-                // TODO(P1-T2): wire to bookingsAPI.cancel(booking.id) with a
-                // confirmation dialog and refresh the list on success.
-                // eslint-disable-next-line no-console
-                console.log('TODO: cancel ' + booking.id);
-              }}
+              onClick={() => onCancelClick(booking)}
               className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-red-600 border border-red-200 rounded-lg hover:bg-red-50 transition-colors"
             >
               <XCircle className="w-4 h-4" />
@@ -253,6 +252,9 @@ export const MyTripsPage = () => {
   const [error, setError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
   const [activeTab, setActiveTab] = useState<TripTab>('upcoming');
+  // Lifted modal state so the cancel confirmation can refresh the list on
+  // success (re-trigger the fetch via reloadKey).
+  const [bookingToCancel, setBookingToCancel] = useState<Booking | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -344,6 +346,7 @@ export const MyTripsPage = () => {
                     key={booking.id}
                     booking={booking}
                     tab={activeTab}
+                    onCancelClick={setBookingToCancel}
                   />
                 ))}
               </div>
@@ -351,6 +354,12 @@ export const MyTripsPage = () => {
           </div>
         </div>
       </div>
+
+      <CancelBookingModal
+        booking={bookingToCancel}
+        onClose={() => setBookingToCancel(null)}
+        onCancelled={() => setReloadKey((k) => k + 1)}
+      />
     </div>
   );
 };
