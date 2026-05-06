@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Menu, User, Globe, Search, Bell } from 'lucide-react';
 import { cn } from '@/utils/cn';
-import { useClickOutside } from '@/hooks';
+import { useClickOutside, useUnreadCount } from '@/hooks';
 import type { User as UserType } from '@/types';
 
 interface HeaderProps {
@@ -15,7 +15,8 @@ export const Header = ({ user, onLogout, variant = 'default' }: HeaderProps) => 
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const navigate = useNavigate();
-  
+  const unreadCount = useUnreadCount();
+
   const userMenuRef = useClickOutside<HTMLDivElement>(() => setIsUserMenuOpen(false));
 
   const isTransparent = variant === 'transparent';
@@ -97,7 +98,7 @@ export const Header = ({ user, onLogout, variant = 'default' }: HeaderProps) => 
               <button
                 onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
                 className={cn(
-                  'flex items-center gap-2 px-2 py-1.5 rounded-full border transition-all',
+                  'relative flex items-center gap-2 px-2 py-1.5 rounded-full border transition-all',
                   isTransparent
                     ? 'border-white/30 text-white hover:bg-white/10'
                     : 'border-gray-300 text-gray-700 hover:shadow-md bg-white'
@@ -122,7 +123,14 @@ export const Header = ({ user, onLogout, variant = 'default' }: HeaderProps) => 
                     <User className="w-4 h-4" />
                   </div>
                 )}
-                {/* TODO: re-add unread-count badge once messagesAPI.getUnreadCount() is wired. */}
+                {user && unreadCount > 0 && (
+                  <span
+                    aria-label={`${unreadCount} unread messages`}
+                    className="absolute -top-1 -right-1 bg-primary text-white text-xs rounded-full w-5 h-5 flex items-center justify-center"
+                  >
+                    {unreadCount > 99 ? '99+' : unreadCount}
+                  </span>
+                )}
               </button>
 
               {/* Dropdown Menu */}
