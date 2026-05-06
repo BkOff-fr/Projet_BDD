@@ -379,3 +379,254 @@ export interface SendMessageInput {
   accommodationId?: number;
   content: string;
 }
+
+// ---------------------------------------------------------------------------
+// User self-service inputs (PATCH /users/me, POST /users/me/*, DELETE /users/me)
+// ---------------------------------------------------------------------------
+
+/**
+ * Payload for `PATCH /users/me` (`userController.ts#updateProfile`).
+ * Mirrors `updateProfileSchema` in the backend. All fields optional — server
+ * 400s if none are provided.
+ */
+export interface UpdateProfileInput {
+  firstName?: string;
+  lastName?: string;
+  phone?: string;
+  profilePicture?: string;
+}
+
+/** Payload for `POST /users/me/password`. */
+export interface ChangePasswordInput {
+  currentPassword: string;
+  newPassword: string;
+}
+
+/** Payload for `POST /users/me/become-host`. The literal `true` is required. */
+export interface BecomeHostInput {
+  agreeToTerms: true;
+}
+
+/** Payload for `DELETE /users/me`. */
+export interface DeleteAccountInput {
+  password: string;
+}
+
+/** Payload for `POST /users/me/picture`. */
+export interface UploadPictureInput {
+  imageUrl: string;
+}
+
+// ---------------------------------------------------------------------------
+// Host inputs (POST/PATCH on /host/*)
+// ---------------------------------------------------------------------------
+
+/** Payload for `PATCH /host/bookings/:id/status`. */
+export interface UpdateBookingStatusInput {
+  status: 'confirmed' | 'completed';
+}
+
+/** Payload for `POST /host/properties/:propertyId/availability`. */
+export interface SetAvailabilityInput {
+  startDate: string; // YYYY-MM-DD
+  endDate: string; // YYYY-MM-DD
+  isAvailable: boolean;
+  reason?: string;
+}
+
+export type PricingRuleType =
+  | 'fixed_increase'
+  | 'percentage_increase'
+  | 'fixed_decrease'
+  | 'percentage_decrease';
+
+/** Payload for `POST /host/properties/:propertyId/pricing-rules`. */
+export interface CreatePricingRuleInput {
+  name: string;
+  description?: string;
+  startDate: string; // YYYY-MM-DD
+  endDate: string; // YYYY-MM-DD
+  ruleType: PricingRuleType;
+  value: number;
+}
+
+// ---------------------------------------------------------------------------
+// Host responses (raw DB rows; backend does not transform these)
+// ---------------------------------------------------------------------------
+
+/**
+ * Shape returned in `GET /host/properties` rows. The controller spreads
+ * `accommodations.*` then JOINs in stats columns. Because no field-by-field
+ * transform happens, the shape is snake_case raw DB rows — not the curated
+ * `Accommodation` shape used elsewhere. Type the extra columns explicitly;
+ * the rest of the row is intentionally loose (`[key: string]: unknown`) until
+ * the backend either transforms or T2-style types are derived.
+ */
+export interface HostProperty {
+  id: number;
+  host_id: number;
+  title: string;
+  description: string;
+  type: AccommodationType;
+  address: string;
+  city: string;
+  country: string;
+  latitude: number | null;
+  longitude: number | null;
+  max_guests: number;
+  bedrooms: number;
+  beds: number;
+  bathrooms: number;
+  price_per_night: number | string;
+  cleaning_fee: number | string | null;
+  service_fee: number | string | null;
+  minimum_nights: number;
+  maximum_nights: number | null;
+  instant_book: number | boolean;
+  house_rules: string | null;
+  is_validated: number | boolean;
+  is_active: number | boolean;
+  has_alarm_system: number | boolean;
+  has_smoke_detector: number | boolean;
+  cancellation_policy_id: number | null;
+  cancellation_policy_name: string | null;
+  created_at: string;
+  updated_at: string;
+  // JOIN-in columns from getHostProperties query
+  avg_rating: string | null;
+  review_count: number;
+  active_bookings: number;
+  listing_status: 'missing_alarm' | 'pending_validation' | 'inactive' | 'live';
+}
+
+/** Raw availability row returned by `GET /host/properties/:propertyId/availability`. */
+export interface Availability {
+  id: number;
+  accommodation_id: number;
+  start_date: string;
+  end_date: string;
+  is_available: number | boolean;
+  reason: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+/** Raw pricing-rules row returned by `GET /host/properties/:propertyId/pricing-rules`. */
+export interface PricingRule {
+  id: number;
+  accommodation_id: number;
+  name: string;
+  description: string | null;
+  start_date: string;
+  end_date: string;
+  rule_type: PricingRuleType;
+  value: number | string;
+  is_active: number | boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+/**
+ * Response for `GET /host/properties/:propertyId/availability`. Returns raw
+ * availability rows + a slim list of overlapping bookings for context.
+ */
+export interface AvailabilityCalendar {
+  availability: Availability[];
+  bookings: Array<{
+    check_in_date: string;
+    check_out_date: string;
+    status: BookingStatus;
+  }>;
+}
+
+/**
+ * Shape returned by `GET /host/dashboard` (`hostController.ts#getHostDashboard`).
+ * Most nested objects come straight from MySQL aggregate rows so SUM/AVG
+ * columns may arrive as strings (mysql2 default for DECIMAL/COUNT).
+ */
+export interface HostDashboardData {
+  properties: {
+    total: number;
+  };
+  bookings: {
+    total: number;
+    pending: number | string | null;
+    confirmed: number | string | null;
+    completed: number | string | null;
+  };
+  earnings: {
+    total: number | string;
+    completed_earnings: number | string;
+  };
+  monthlyStats: Array<{
+    month: string; // YYYY-MM
+    bookings: number;
+    earnings: number | string;
+  }>;
+  recentBookings: Array<{
+    id: number;
+    accommodation_id: number;
+    guest_id: number;
+    check_in_date: string;
+    check_out_date: string;
+    num_guests: number;
+    total_price: number | null;
+    status: BookingStatus;
+    special_requests: string | null;
+    created_at: string;
+    updated_at: string;
+    accommodation_title: string;
+    guest_first_name: string;
+    guest_last_name: string;
+  }>;
+  rating: {
+    avg_rating: string | null;
+    total_reviews: number;
+  };
+}
+
+/**
+ * Shape returned by `GET /host/properties/:propertyId/bookings`. Raw booking
+ * rows + JOINed guest/payment columns. Snake_case to match wire reality.
+ */
+export interface HostPropertyBooking {
+  id: number;
+  accommodation_id: number;
+  guest_id: number;
+  check_in_date: string;
+  check_out_date: string;
+  num_guests: number;
+  total_price: number | null;
+  status: BookingStatus;
+  special_requests: string | null;
+  created_at: string;
+  updated_at: string;
+  guest_first_name: string;
+  guest_last_name: string;
+  guest_email: string;
+  guest_phone: string | null;
+  payment_status: string | null;
+  paid_at: string | null;
+}
+
+/**
+ * Row shape returned by `GET /users/me/reviews` — raw `reviews` row plus
+ * a few JOINed accommodation/host columns. Backend doesn't transform.
+ */
+export interface MyReviewRow {
+  id: number;
+  booking_id: number;
+  rating: number;
+  comment: string | null;
+  cleanliness_rating: number | null;
+  accuracy_rating: number | null;
+  checkin_rating: number | null;
+  communication_rating: number | null;
+  location_rating: number | null;
+  value_rating: number | null;
+  created_at: string;
+  updated_at: string;
+  accommodation_title: string;
+  accommodation_city: string;
+  host_first_name: string;
+}

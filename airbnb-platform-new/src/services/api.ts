@@ -1,5 +1,6 @@
 import type {
   User,
+  UserProfile,
   Accommodation,
   AccommodationDetail,
   Booking,
@@ -12,6 +13,20 @@ import type {
   CreateBookingInput,
   CreateReviewInput,
   SendMessageInput,
+  UpdateProfileInput,
+  ChangePasswordInput,
+  BecomeHostInput,
+  DeleteAccountInput,
+  UploadPictureInput,
+  UpdateBookingStatusInput,
+  SetAvailabilityInput,
+  CreatePricingRuleInput,
+  HostDashboardData,
+  HostProperty,
+  HostPropertyBooking,
+  AvailabilityCalendar,
+  PricingRule,
+  MyReviewRow,
 } from '@/types';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
@@ -145,9 +160,105 @@ export const messagesAPI = {
   getUnreadCount: () => fetchAPI<{ count: number }>('/messages/unread'),
 };
 
+// Users API (self-service: /api/users/me/*)
+export const usersAPI = {
+  getProfile: () => fetchAPI<UserProfile>('/users/me'),
+
+  updateProfile: (data: UpdateProfileInput) =>
+    fetchAPI<{ message: string }>('/users/me', {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    }),
+
+  changePassword: (data: ChangePasswordInput) =>
+    fetchAPI<{ message: string }>('/users/me/password', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  becomeHost: (data: BecomeHostInput) =>
+    fetchAPI<{ message: string }>('/users/me/become-host', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  getMyReviews: () => fetchAPI<MyReviewRow[]>('/users/me/reviews'),
+
+  deleteAccount: (data: DeleteAccountInput) =>
+    fetchAPI<{ message: string }>('/users/me', {
+      method: 'DELETE',
+      body: JSON.stringify(data),
+    }),
+
+  uploadPicture: (data: UploadPictureInput) =>
+    fetchAPI<{ message: string; url: string }>('/users/me/picture', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+};
+
+// Host API (host-only: /api/host/*)
+export const hostAPI = {
+  getDashboard: () => fetchAPI<HostDashboardData>('/host/dashboard'),
+
+  getProperties: () => fetchAPI<HostProperty[]>('/host/properties'),
+
+  getPropertyBookings: (propertyId: number) =>
+    fetchAPI<HostPropertyBooking[]>(`/host/properties/${propertyId}/bookings`),
+
+  // Backend mounts this route as `/host/bookings/:id/status` — we keep
+  // `bookingId` as the developer-facing param for clarity.
+  updateBookingStatus: (bookingId: number, data: UpdateBookingStatusInput) =>
+    fetchAPI<{ message: string }>(`/host/bookings/${bookingId}/status`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    }),
+
+  setAvailability: (propertyId: number, data: SetAvailabilityInput) =>
+    fetchAPI<{ message: string }>(
+      `/host/properties/${propertyId}/availability`,
+      {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }
+    ),
+
+  getAvailabilityCalendar: (
+    propertyId: number,
+    options?: { year?: number; month?: number }
+  ) => {
+    const params = new URLSearchParams();
+    if (options?.year !== undefined) params.append('year', String(options.year));
+    if (options?.month !== undefined) params.append('month', String(options.month));
+    const query = params.toString() ? `?${params.toString()}` : '';
+    return fetchAPI<AvailabilityCalendar>(
+      `/host/properties/${propertyId}/availability${query}`
+    );
+  },
+
+  addPricingRule: (propertyId: number, data: CreatePricingRuleInput) =>
+    fetchAPI<{ message: string; id: number }>(
+      `/host/properties/${propertyId}/pricing-rules`,
+      {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }
+    ),
+
+  getPricingRules: (propertyId: number) =>
+    fetchAPI<PricingRule[]>(`/host/properties/${propertyId}/pricing-rules`),
+
+  deletePricingRule: (ruleId: number) =>
+    fetchAPI<{ message: string }>(`/host/pricing-rules/${ruleId}`, {
+      method: 'DELETE',
+    }),
+};
+
 export default {
   auth: authAPI,
   accommodations: accommodationsAPI,
   bookings: bookingsAPI,
   messages: messagesAPI,
+  users: usersAPI,
+  host: hostAPI,
 };
