@@ -125,6 +125,8 @@ export const Header = ({ user, onLogout, variant = 'default' }: HeaderProps) => 
                 )}
                 {user && unreadCount > 0 && (
                   <span
+                    aria-live="polite"
+                    aria-atomic="true"
                     aria-label={`${unreadCount} unread messages`}
                     className="absolute -top-1 -right-1 bg-primary text-white text-xs rounded-full w-5 h-5 flex items-center justify-center"
                   >

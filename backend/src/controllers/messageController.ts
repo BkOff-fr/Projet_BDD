@@ -182,5 +182,5 @@ export const getUnreadCount = asyncHandler(async (req: AuthRequest, res: Respons
     [userId]
   );
 
-  res.json({ count: (rows as any[])[0].count });
+  res.json({ count: Number((rows as any[])[0].count) });
 });
