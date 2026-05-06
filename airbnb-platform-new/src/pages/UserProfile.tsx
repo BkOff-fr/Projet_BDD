@@ -1,12 +1,7 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   Star,
-  Shield,
-  Award,
-  MapPin,
-  Briefcase,
-  Globe,
   Calendar,
   Edit,
   Check,
@@ -14,10 +9,20 @@ import {
   MessageSquare,
   Settings,
 } from 'lucide-react';
-import { accommodations, bookings } from '@/data/mockData';
+import { LoadingState, ErrorState } from '@/components';
+import { usersAPI, bookingsAPI, hostAPI } from '@/services/api';
 import { cn } from '@/utils/cn';
-import { formatDate, getInitials } from '@/utils/helpers';
-import type { User } from '@/types';
+import {
+  formatDate,
+  PLACEHOLDER_IMAGE,
+  formatCurrency,
+} from '@/utils/helpers';
+import type {
+  User,
+  UserProfile as UserProfileType,
+  Booking,
+  HostProperty,
+} from '@/types';
 
 interface UserProfileProps {
   user: User;
@@ -25,21 +30,82 @@ interface UserProfileProps {
 
 export const UserProfile = ({ user }: UserProfileProps) => {
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState<'about' | 'reviews' | 'listings'>('about');
-  const [isEditing, setIsEditing] = useState(false);
+  const [activeTab, setActiveTab] = useState<
+    'about' | 'reviews' | 'listings'
+  >('about');
 
-  // Get user's bookings
-  const userBookings = bookings.filter((b) => b.guestId === user.id);
+  const [profile, setProfile] = useState<UserProfileType | null>(null);
+  const [bookings, setBookings] = useState<Booking[]>([]);
+  const [listings, setListings] = useState<HostProperty[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
 
-  // Get user's listings if they're a host
-  const userListings = user.isHost
-    ? accommodations.filter((a) => a.hostId === user.id)
-    : [];
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
 
-  const tabs = [
+    const tasks: Promise<unknown>[] = [
+      usersAPI.getProfile().then((p) => {
+        if (!cancelled) setProfile(p);
+      }),
+      bookingsAPI.getMyBookings().then((b) => {
+        if (!cancelled) setBookings(b);
+      }),
+    ];
+    if (user.isHost) {
+      tasks.push(
+        hostAPI.getProperties().then((l) => {
+          if (!cancelled) setListings(l);
+        })
+      );
+    } else {
+      setListings([]);
+    }
+
+    Promise.all(tasks)
+      .then(() => {
+        if (!cancelled) setLoading(false);
+      })
+      .catch((err: Error) => {
+        if (!cancelled) {
+          setError(err.message);
+          setLoading(false);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [user.isHost, reloadKey]);
+
+  if (loading) {
+    return <LoadingState label="Loading profile..." />;
+  }
+
+  if (error || !profile) {
+    return (
+      <ErrorState
+        message={error ?? 'Could not load your profile.'}
+        onRetry={() => setReloadKey((k) => k + 1)}
+      />
+    );
+  }
+
+  const tabs: Array<{
+    id: 'about' | 'reviews' | 'listings';
+    label: string;
+    icon: typeof Star | null;
+  }> = [
     { id: 'about', label: 'About', icon: null },
     { id: 'reviews', label: 'Reviews', icon: Star },
-    ...(user.isHost ? [{ id: 'listings', label: 'Listings', icon: Home }] : []),
+    ...((user.isHost
+      ? [{ id: 'listings' as const, label: 'Listings', icon: Home }]
+      : []) as Array<{
+      id: 'about' | 'reviews' | 'listings';
+      label: string;
+      icon: typeof Star | null;
+    }>),
   ];
 
   return (
@@ -53,45 +119,52 @@ export const UserProfile = ({ user }: UserProfileProps) => {
               <div className="border border-gray-200 rounded-xl p-6">
                 <div className="flex flex-col items-center">
                   <div className="relative">
-                    <img
-                      src={user.avatar}
-                      alt={`${user.firstName} ${user.lastName}`}
-                      className="w-32 h-32 rounded-full object-cover"
-                    />
-                    {user.isHost && (
-                      <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 bg-primary text-white px-3 py-1 rounded-full text-sm font-semibold flex items-center gap-1">
-                        <Award className="w-4 h-4" />
-                        Superhost
+                    {user.profilePicture ? (
+                      <img
+                        src={user.profilePicture}
+                        alt={`${user.firstName} ${user.lastName}`}
+                        className="w-32 h-32 rounded-full object-cover"
+                      />
+                    ) : (
+                      <div className="w-32 h-32 rounded-full bg-gray-300 flex items-center justify-center text-3xl font-semibold text-gray-700">
+                        {user.firstName.charAt(0)}
+                        {user.lastName.charAt(0)}
                       </div>
                     )}
                   </div>
                   <h1 className="text-2xl font-bold text-gray-900 mt-4">
                     {user.firstName}
                   </h1>
-                  <p className="text-gray-500">{user.isHost ? 'Host' : 'Guest'}</p>
+                  <p className="text-gray-500">
+                    {user.isHost ? 'Host' : 'Guest'}
+                  </p>
                 </div>
 
                 <div className="mt-6 pt-6 border-t space-y-3">
                   {user.isHost && (
                     <div className="flex items-center justify-between">
-                      <span className="text-gray-600">Reviews</span>
-                      <span className="font-semibold">{userListings.reduce((acc, l) => acc + l.reviewCount, 0)}</span>
+                      <span className="text-gray-600">Properties</span>
+                      <span className="font-semibold">
+                        {profile.stats.propertyCount}
+                      </span>
                     </div>
                   )}
                   <div className="flex items-center justify-between">
                     <span className="text-gray-600">Trips</span>
-                    <span className="font-semibold">{userBookings.length}</span>
+                    <span className="font-semibold">
+                      {profile.stats.tripCount}
+                    </span>
                   </div>
                   <div className="flex items-center justify-between">
                     <span className="text-gray-600">Member since</span>
                     <span className="font-semibold">
-                      {formatDate(user.createdAt, 'yyyy')}
+                      {formatDate(profile.joinedAt, 'yyyy')}
                     </span>
                   </div>
                 </div>
 
                 <button
-                  onClick={() => setIsEditing(!isEditing)}
+                  onClick={() => navigate('/settings')}
                   className="w-full mt-6 px-4 py-2 border border-gray-900 rounded-lg font-semibold text-gray-900 hover:bg-gray-50 transition-colors flex items-center justify-center gap-2"
                 >
                   <Edit className="w-4 h-4" />
@@ -107,22 +180,22 @@ export const UserProfile = ({ user }: UserProfileProps) => {
                 <div className="space-y-3">
                   <div className="flex items-center gap-3">
                     <Check className="w-5 h-5 text-green-600" />
-                    <span className="text-gray-700">Identity verified</span>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <Check className="w-5 h-5 text-green-600" />
                     <span className="text-gray-700">Email address</span>
                   </div>
-                  <div className="flex items-center gap-3">
-                    <Check className="w-5 h-5 text-green-600" />
-                    <span className="text-gray-700">Phone number</span>
-                  </div>
+                  {user.phone && (
+                    <div className="flex items-center gap-3">
+                      <Check className="w-5 h-5 text-green-600" />
+                      <span className="text-gray-700">Phone number</span>
+                    </div>
+                  )}
                 </div>
               </div>
 
               {/* Quick Links */}
               <div className="border border-gray-200 rounded-xl p-6">
-                <h3 className="font-semibold text-gray-900 mb-4">Quick Links</h3>
+                <h3 className="font-semibold text-gray-900 mb-4">
+                  Quick Links
+                </h3>
                 <div className="space-y-2">
                   <Link
                     to="/bookings"
@@ -167,7 +240,7 @@ export const UserProfile = ({ user }: UserProfileProps) => {
                 {tabs.map((tab) => (
                   <button
                     key={tab.id}
-                    onClick={() => setActiveTab(tab.id as typeof activeTab)}
+                    onClick={() => setActiveTab(tab.id)}
                     className={cn(
                       'pb-4 text-sm font-medium transition-colors relative',
                       activeTab === tab.id
@@ -187,55 +260,43 @@ export const UserProfile = ({ user }: UserProfileProps) => {
             {/* Tab Content */}
             {activeTab === 'about' && (
               <div className="space-y-8">
-                {/* About Section */}
+                {/* About Section — bio/work/languages/location are not stored
+                    in the BDD yet (see types/index.ts header). We just show a
+                    "add a bio" CTA tied to a future task. */}
                 <div>
                   <h2 className="text-xl font-semibold text-gray-900 mb-4">
                     About
                   </h2>
-                  <p className="text-gray-700 leading-relaxed">
-                    {user.about || 'No bio yet.'}
-                  </p>
-                </div>
-
-                {/* Details */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {user.location && (
-                    <div className="flex items-center gap-3">
-                      <MapPin className="w-5 h-5 text-gray-500" />
-                      <span className="text-gray-700">Lives in {user.location}</span>
-                    </div>
-                  )}
-                  {user.work && (
-                    <div className="flex items-center gap-3">
-                      <Briefcase className="w-5 h-5 text-gray-500" />
-                      <span className="text-gray-700">Work: {user.work}</span>
-                    </div>
-                  )}
-                  {user.languages && user.languages.length > 0 && (
-                    <div className="flex items-center gap-3">
-                      <Globe className="w-5 h-5 text-gray-500" />
-                      <span className="text-gray-700">
-                        Speaks: {user.languages.join(', ')}
-                      </span>
-                    </div>
-                  )}
+                  <div className="border border-dashed border-gray-300 rounded-xl p-6 text-center">
+                    <p className="text-gray-600 mb-3">
+                      Tell other guests and hosts a little about yourself.
+                    </p>
+                    <button
+                      onClick={() => navigate('/settings')}
+                      className="px-4 py-2 border border-gray-900 rounded-lg font-semibold text-gray-900 hover:bg-gray-50 transition-colors"
+                    >
+                      Add a bio
+                    </button>
+                  </div>
                 </div>
 
                 {/* Recent Trips */}
-                {userBookings.length > 0 && (
+                {bookings.length > 0 && (
                   <div>
                     <h2 className="text-xl font-semibold text-gray-900 mb-4">
                       Recent Trips
                     </h2>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      {userBookings.slice(0, 4).map((booking) => (
+                      {bookings.slice(0, 4).map((booking) => (
                         <div
                           key={booking.id}
-                          onClick={() => navigate(`/listing/${booking.accommodationId}`)}
+                          onClick={() =>
+                            navigate(`/listing/${booking.accommodation.id}`)
+                          }
                           className="border border-gray-200 rounded-lg overflow-hidden cursor-pointer hover:shadow-md transition-shadow"
                         >
                           <img
-                            src={booking.accommodation.images[0]}
+                            src={PLACEHOLDER_IMAGE}
                             alt={booking.accommodation.title}
                             className="w-full h-32 object-cover"
                           />
@@ -244,8 +305,8 @@ export const UserProfile = ({ user }: UserProfileProps) => {
                               {booking.accommodation.title}
                             </p>
                             <p className="text-sm text-gray-500">
-                              {formatDate(booking.checkIn, 'MMM d')} -{' '}
-                              {formatDate(booking.checkOut, 'MMM d, yyyy')}
+                              {formatDate(booking.checkInDate, 'MMM d')} -{' '}
+                              {formatDate(booking.checkOutDate, 'MMM d, yyyy')}
                             </p>
                           </div>
                         </div>
@@ -261,7 +322,9 @@ export const UserProfile = ({ user }: UserProfileProps) => {
                 <h2 className="text-xl font-semibold text-gray-900 mb-4">
                   Reviews
                 </h2>
-                <p className="text-gray-600">Reviews from hosts and guests will appear here.</p>
+                <p className="text-gray-600">
+                  Reviews from hosts and guests will appear here.
+                </p>
               </div>
             )}
 
@@ -278,38 +341,53 @@ export const UserProfile = ({ user }: UserProfileProps) => {
                     Manage all
                   </button>
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  {userListings.map((listing) => (
-                    <div
-                      key={listing.id}
-                      onClick={() => navigate(`/listing/${listing.id}`)}
-                      className="border border-gray-200 rounded-lg overflow-hidden cursor-pointer hover:shadow-md transition-shadow"
-                    >
-                      <img
-                        src={listing.images[0]}
-                        alt={listing.title}
-                        className="w-full h-48 object-cover"
-                      />
-                      <div className="p-4">
-                        <div className="flex items-center gap-1 mb-1">
-                          <Star className="w-4 h-4 fill-primary text-primary" />
-                          <span className="font-semibold">
-                            {listing.rating.toFixed(2)}
-                          </span>
-                          <span className="text-gray-500">
-                            ({listing.reviewCount} reviews)
-                          </span>
+                {listings.length === 0 ? (
+                  <p className="text-gray-600">
+                    You haven&apos;t created any listings yet.
+                  </p>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {listings.map((listing) => {
+                      const avg = listing.avg_rating
+                        ? Number(listing.avg_rating)
+                        : null;
+                      return (
+                        <div
+                          key={listing.id}
+                          onClick={() => navigate(`/listing/${listing.id}`)}
+                          className="border border-gray-200 rounded-lg overflow-hidden cursor-pointer hover:shadow-md transition-shadow"
+                        >
+                          <img
+                            src={PLACEHOLDER_IMAGE}
+                            alt={listing.title}
+                            className="w-full h-48 object-cover"
+                          />
+                          <div className="p-4">
+                            <div className="flex items-center gap-1 mb-1">
+                              <Star className="w-4 h-4 fill-primary text-primary" />
+                              <span className="font-semibold">
+                                {avg !== null ? avg.toFixed(2) : 'New'}
+                              </span>
+                              <span className="text-gray-500">
+                                ({listing.review_count} reviews)
+                              </span>
+                            </div>
+                            <p className="font-semibold text-gray-900 truncate">
+                              {listing.title}
+                            </p>
+                            <p className="text-gray-600">
+                              {listing.city}, {listing.country}
+                            </p>
+                            <p className="text-sm text-gray-500 mt-1">
+                              {formatCurrency(Number(listing.price_per_night))}{' '}
+                              / night
+                            </p>
+                          </div>
                         </div>
-                        <p className="font-semibold text-gray-900 truncate">
-                          {listing.title}
-                        </p>
-                        <p className="text-gray-600">
-                          {listing.location.city}, {listing.location.country}
-                        </p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             )}
           </div>

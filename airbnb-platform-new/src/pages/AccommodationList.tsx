@@ -1,35 +1,45 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { SlidersHorizontal, Map, Grid3X3, ChevronDown } from 'lucide-react';
-import { AccommodationCard, FilterSidebar } from '@/components';
-import { accommodations } from '@/data/mockData';
+import {
+  AccommodationCard,
+  FilterSidebar,
+  LoadingState,
+  ErrorState,
+} from '@/components';
+import { accommodationsAPI } from '@/services/api';
 import { useSearch } from '@/hooks';
-import { getPriceRange } from '@/utils/helpers';
 import { cn } from '@/utils/cn';
+import type { Accommodation } from '@/types';
 
 export const AccommodationList = () => {
   const [searchParams] = useSearchParams();
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   const [viewMode, setViewMode] = useState<'grid' | 'map'>('grid');
-  
+  const [sortBy, setSortBy] = useState('recommended');
+
+  // Filter UI state. The hook now ONLY manages local filter state — actual
+  // filtering happens server-side via the API call below.
   const {
     filters,
-    filteredAccommodations,
     activeFiltersCount,
     updateFilters,
     clearFilters,
     setLocation,
     setGuests,
-  } = useSearch({ accommodations });
+  } = useSearch();
 
-  const priceRange = getPriceRange(accommodations);
+  const [accommodations, setAccommodations] = useState<Accommodation[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
 
-  // Parse URL params on mount
+  // Hydrate filter state from URL params once. The location/guests come from
+  // the hero search bar; type comes from the Home category strip.
   useEffect(() => {
     const location = searchParams.get('location');
-    const checkIn = searchParams.get('checkIn');
-    const checkOut = searchParams.get('checkOut');
     const guests = searchParams.get('guests');
+    const type = searchParams.get('type');
 
     if (location) setLocation(location);
     if (guests) {
@@ -41,7 +51,75 @@ export const AccommodationList = () => {
         pets: 0,
       });
     }
-  }, [searchParams, setLocation, setGuests]);
+    if (type) {
+      updateFilters({ propertyTypes: [type as Accommodation['type']] });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
+
+  // Fetch from API whenever the relevant filter slice changes.
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+
+    const checkInISO = filters.checkIn
+      ? filters.checkIn.toISOString().split('T')[0]
+      : undefined;
+    const checkOutISO = filters.checkOut
+      ? filters.checkOut.toISOString().split('T')[0]
+      : undefined;
+    const totalGuests = filters.guests
+      ? filters.guests.adults +
+        filters.guests.children +
+        filters.guests.infants
+      : undefined;
+
+    accommodationsAPI
+      .getAll({
+        location: filters.location || undefined,
+        checkIn: checkInISO,
+        checkOut: checkOutISO,
+        guests: totalGuests,
+        minPrice: filters.priceRange?.min,
+        maxPrice: filters.priceRange?.max,
+        // The API only supports a single `type` filter — if the user picks
+        // multiple property-type chips we send the first and apply the rest
+        // client-side below. TODO: extend backend to accept arrays.
+        type: filters.propertyTypes?.[0],
+      })
+      .then((list) => {
+        if (cancelled) return;
+        setAccommodations(list);
+        setLoading(false);
+      })
+      .catch((err: Error) => {
+        if (cancelled) return;
+        setError(err.message);
+        setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    filters.location,
+    filters.checkIn,
+    filters.checkOut,
+    filters.guests,
+    filters.priceRange?.min,
+    filters.priceRange?.max,
+    filters.propertyTypes,
+    reloadKey,
+  ]);
+
+  // Compute price range from the current result set so the sidebar slider has
+  // sensible bounds. (Server-side global price range would require a separate
+  // endpoint; using current results is a fine approximation for now.)
+  const priceRange = useMemo(() => {
+    if (accommodations.length === 0) return { min: 0, max: 1000 };
+    const prices = accommodations.map((a) => a.pricePerNight);
+    return { min: Math.min(...prices), max: Math.max(...prices) };
+  }, [accommodations]);
 
   const sortOptions = [
     { value: 'recommended', label: 'Recommended' },
@@ -50,20 +128,41 @@ export const AccommodationList = () => {
     { value: 'rating', label: 'Top Rated' },
   ];
 
-  const [sortBy, setSortBy] = useState('recommended');
+  // Apply secondary client-side filters (multiple property types, amenities,
+  // instant book) on top of the server response, then sort.
+  const visibleAccommodations = useMemo(() => {
+    let list = accommodations;
 
-  const sortedAccommodations = [...filteredAccommodations].sort((a, b) => {
-    switch (sortBy) {
-      case 'price_low':
-        return a.pricePerNight - b.pricePerNight;
-      case 'price_high':
-        return b.pricePerNight - a.pricePerNight;
-      case 'rating':
-        return b.rating - a.rating;
-      default:
-        return 0;
+    if (filters.propertyTypes && filters.propertyTypes.length > 1) {
+      const allowed = new Set(filters.propertyTypes);
+      list = list.filter((a) => allowed.has(a.type));
     }
-  });
+
+    if (filters.amenities && filters.amenities.length > 0) {
+      const required = filters.amenities;
+      list = list.filter((a) => {
+        const ids = a.amenities.map((x) => String(x.id));
+        return required.every((id) => ids.includes(id));
+      });
+    }
+
+    if (filters.instantBook) {
+      list = list.filter((a) => a.instantBook);
+    }
+
+    return [...list].sort((a, b) => {
+      switch (sortBy) {
+        case 'price_low':
+          return a.pricePerNight - b.pricePerNight;
+        case 'price_high':
+          return b.pricePerNight - a.pricePerNight;
+        case 'rating':
+          return (b.rating.average ?? 0) - (a.rating.average ?? 0);
+        default:
+          return 0;
+      }
+    });
+  }, [accommodations, filters.propertyTypes, filters.amenities, filters.instantBook, sortBy]);
 
   return (
     <div className="min-h-screen bg-white">
@@ -74,9 +173,12 @@ export const AccommodationList = () => {
             {/* Results Count */}
             <div>
               <p className="text-gray-600">
-                {filteredAccommodations.length} stays
+                {visibleAccommodations.length} stays
                 {filters.location && (
-                  <span> in <span className="font-semibold">{filters.location}</span></span>
+                  <span>
+                    {' '}
+                    in <span className="font-semibold">{filters.location}</span>
+                  </span>
                 )}
               </p>
             </div>
@@ -167,9 +269,17 @@ export const AccommodationList = () => {
             priceRange={priceRange}
           />
 
-          {/* Results Grid */}
+          {/* Results */}
           <div className="flex-1">
-            {sortedAccommodations.length === 0 ? (
+            {loading ? (
+              <LoadingState label="Searching stays..." className="py-16 flex items-center justify-center" />
+            ) : error ? (
+              <ErrorState
+                message={error}
+                onRetry={() => setReloadKey((k) => k + 1)}
+                className="py-16 flex items-center justify-center"
+              />
+            ) : visibleAccommodations.length === 0 ? (
               <div className="text-center py-16">
                 <div className="w-24 h-24 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
                   <SlidersHorizontal className="w-10 h-10 text-gray-400" />
@@ -189,7 +299,7 @@ export const AccommodationList = () => {
               </div>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                {sortedAccommodations.map((accommodation) => (
+                {visibleAccommodations.map((accommodation) => (
                   <AccommodationCard
                     key={accommodation.id}
                     accommodation={accommodation}

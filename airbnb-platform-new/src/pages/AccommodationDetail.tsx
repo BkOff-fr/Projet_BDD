@@ -1,25 +1,27 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   Star,
   Share,
   Heart,
   MapPin,
-  Home,
-  Bed,
-  Bath,
-  Users,
   Check,
   ChevronLeft,
-  ChevronRight,
   Shield,
-  Award,
   Flag,
 } from 'lucide-react';
-import { BookingForm, ReviewCard } from '@/components';
-import { accommodations, amenities } from '@/data/mockData';
+import {
+  BookingForm,
+  ReviewCard,
+  LoadingState,
+} from '@/components';
+import { accommodationsAPI } from '@/services/api';
 import { cn } from '@/utils/cn';
-import { formatCurrency, getPropertyTypeLabel, getAccommodationTypeLabel } from '@/utils/helpers';
+import {
+  getAccommodationTypeLabel,
+  PLACEHOLDER_IMAGE,
+} from '@/utils/helpers';
+import type { AccommodationDetail as AccommodationDetailType } from '@/types';
 
 export const AccommodationDetail = () => {
   const { id } = useParams<{ id: string }>();
@@ -29,28 +31,80 @@ export const AccommodationDetail = () => {
   const [showAllAmenities, setShowAllAmenities] = useState(false);
   const [showAllReviews, setShowAllReviews] = useState(false);
 
-  const accommodation = accommodations.find((acc) => acc.id === id);
+  const [accommodation, setAccommodation] =
+    useState<AccommodationDetailType | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
 
-  if (!accommodation) {
+  useEffect(() => {
+    if (!id) return;
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+    accommodationsAPI
+      .getById(id)
+      .then((data) => {
+        if (cancelled) return;
+        setAccommodation(data);
+        setLoading(false);
+      })
+      .catch((err: Error) => {
+        if (cancelled) return;
+        setError(err.message);
+        setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [id, reloadKey]);
+
+  if (loading) {
+    return <LoadingState label="Loading listing..." />;
+  }
+
+  // 404-ish: detail endpoint rejected the request. Show the same not-found
+  // screen the page used to render when `accommodations.find` returned undefined.
+  if (error || !accommodation) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="min-h-screen flex items-center justify-center px-4">
         <div className="text-center">
           <h1 className="text-2xl font-bold text-gray-900 mb-4">
             Accommodation not found
           </h1>
-          <button
-            onClick={() => navigate('/listings')}
-            className="px-6 py-3 bg-primary text-white rounded-lg font-semibold hover:bg-primary-dark transition-colors"
-          >
-            Browse Listings
-          </button>
+          {error && (
+            <p className="text-sm text-gray-600 mb-6 max-w-md mx-auto">
+              {error}
+            </p>
+          )}
+          <div className="flex flex-col sm:flex-row gap-3 justify-center">
+            <button
+              onClick={() => setReloadKey((k) => k + 1)}
+              className="px-6 py-3 border border-gray-900 text-gray-900 rounded-lg font-semibold hover:bg-gray-50 transition-colors"
+            >
+              Try again
+            </button>
+            <button
+              onClick={() => navigate('/listings')}
+              className="px-6 py-3 bg-primary text-white rounded-lg font-semibold hover:bg-primary-dark transition-colors"
+            >
+              Browse Listings
+            </button>
+          </div>
         </div>
       </div>
     );
   }
 
-  const mainImage = accommodation.images[0];
-  const sideImages = accommodation.images.slice(1, 5);
+  // TODO: When an `images` table exists, replace this stub with the real list.
+  // For now we render the placeholder image multiple times to keep the
+  // existing photo-grid layout intact.
+  const galleryImages: string[] = Array.from(
+    { length: 5 },
+    () => accommodation.coverImage ?? PLACEHOLDER_IMAGE
+  );
+  const mainImage = galleryImages[0];
+  const sideImages = galleryImages.slice(1, 5);
 
   const handleBookingSubmit = (bookingData: {
     checkIn: Date | null;
@@ -72,6 +126,35 @@ export const AccommodationDetail = () => {
   const displayedAmenities = showAllAmenities
     ? accommodation.amenities
     : accommodation.amenities.slice(0, 10);
+
+  // Compute average per-category rating from real reviews. If there are no
+  // reviews at all, the categories block hides entirely.
+  const categoryAverages = (() => {
+    const reviews = accommodation.reviews;
+    if (reviews.length === 0) return null;
+
+    const sum = (key: keyof (typeof reviews)[number]['categories']) => {
+      let total = 0;
+      let count = 0;
+      for (const r of reviews) {
+        const v = r.categories[key];
+        if (typeof v === 'number') {
+          total += v;
+          count += 1;
+        }
+      }
+      return count > 0 ? total / count : null;
+    };
+
+    return [
+      { label: 'Cleanliness', value: sum('cleanliness') },
+      { label: 'Accuracy', value: sum('accuracy') },
+      { label: 'Check-in', value: sum('checkIn') },
+      { label: 'Communication', value: sum('communication') },
+      { label: 'Location', value: sum('location') },
+      { label: 'Value', value: sum('value') },
+    ].filter((c): c is { label: string; value: number } => c.value !== null);
+  })();
 
   if (showAllPhotos) {
     return (
@@ -102,7 +185,7 @@ export const AccommodationDetail = () => {
         </div>
         <div className="max-w-6xl mx-auto px-6 py-8">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {accommodation.images.map((image, index) => (
+            {galleryImages.map((image, index) => (
               <div
                 key={index}
                 className="aspect-[4/3] rounded-lg overflow-hidden"
@@ -120,6 +203,9 @@ export const AccommodationDetail = () => {
     );
   }
 
+  const ratingAverage = accommodation.rating.average;
+  const ratingCount = accommodation.rating.count;
+
   return (
     <div className="min-h-screen bg-white">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -133,16 +219,12 @@ export const AccommodationDetail = () => {
               <div className="flex items-center gap-1">
                 <Star className="w-4 h-4 fill-primary text-primary" />
                 <span className="font-semibold">
-                  {accommodation.rating.toFixed(2)}
+                  {ratingAverage !== null ? ratingAverage.toFixed(2) : 'New'}
                 </span>
                 <span className="text-gray-500 underline">
-                  {accommodation.reviewCount} reviews
+                  {ratingCount} reviews
                 </span>
               </div>
-              <span className="text-gray-300">·</span>
-              <span className="text-gray-700 underline">
-                {accommodation.isSuperhost && 'Superhost'}
-              </span>
               <span className="text-gray-300">·</span>
               <span className="text-gray-700 underline">
                 {accommodation.location.city}, {accommodation.location.country}
@@ -154,7 +236,10 @@ export const AccommodationDetail = () => {
                 className="flex items-center gap-2 text-gray-700 hover:text-gray-900"
               >
                 <Heart
-                  className={cn('w-5 h-5', isLiked && 'fill-primary text-primary')}
+                  className={cn(
+                    'w-5 h-5',
+                    isLiked && 'fill-primary text-primary'
+                  )}
                 />
                 Save
               </button>
@@ -209,40 +294,37 @@ export const AccommodationDetail = () => {
                 <p className="text-gray-600 mt-1">
                   {accommodation.maxGuests} guests · {accommodation.bedrooms}{' '}
                   {accommodation.bedrooms === 1 ? 'bedroom' : 'bedrooms'} ·{' '}
-                  {accommodation.beds} {accommodation.beds === 1 ? 'bed' : 'beds'} ·{' '}
+                  {accommodation.beds}{' '}
+                  {accommodation.beds === 1 ? 'bed' : 'beds'} ·{' '}
                   {accommodation.bathrooms}{' '}
                   {accommodation.bathrooms === 1 ? 'bath' : 'baths'}
                 </p>
               </div>
-              <img
-                src={accommodation.host.avatar}
-                alt={accommodation.host.firstName}
-                className="w-14 h-14 rounded-full object-cover"
-              />
+              {accommodation.host.profilePicture ? (
+                <img
+                  src={accommodation.host.profilePicture}
+                  alt={accommodation.host.firstName}
+                  className="w-14 h-14 rounded-full object-cover"
+                />
+              ) : (
+                <div className="w-14 h-14 rounded-full bg-gray-300 flex items-center justify-center text-sm font-semibold text-gray-700">
+                  {accommodation.host.firstName.charAt(0)}
+                  {accommodation.host.lastName.charAt(0)}
+                </div>
+              )}
             </div>
 
             {/* Highlights */}
             <div className="py-6 border-b space-y-4">
-              {accommodation.isSuperhost && (
-                <div className="flex items-start gap-4">
-                  <Award className="w-6 h-6 text-gray-700 mt-0.5" />
-                  <div>
-                    <h3 className="font-semibold text-gray-900">
-                      {accommodation.host.firstName} is a Superhost
-                    </h3>
-                    <p className="text-gray-600 text-sm">
-                      Superhosts are experienced, highly rated hosts who are committed
-                      to providing great stays for guests.
-                    </p>
-                  </div>
-                </div>
-              )}
               <div className="flex items-start gap-4">
                 <MapPin className="w-6 h-6 text-gray-700 mt-0.5" />
                 <div>
-                  <h3 className="font-semibold text-gray-900">Great location</h3>
+                  <h3 className="font-semibold text-gray-900">
+                    Great location
+                  </h3>
                   <p className="text-gray-600 text-sm">
-                    95% of recent guests gave the location a 5-star rating.
+                    {accommodation.location.city},{' '}
+                    {accommodation.location.country}.
                   </p>
                 </div>
               </div>
@@ -250,24 +332,22 @@ export const AccommodationDetail = () => {
                 <Shield className="w-6 h-6 text-gray-700 mt-0.5" />
                 <div>
                   <h3 className="font-semibold text-gray-900">
-                    Free cancellation for 48 hours
+                    {accommodation.cancellationPolicy.name} cancellation policy
                   </h3>
-                  <p className="text-gray-600 text-sm">
-                    Get a full refund if you change your mind.
-                  </p>
+                  {accommodation.cancellationPolicy.description && (
+                    <p className="text-gray-600 text-sm">
+                      {accommodation.cancellationPolicy.description}
+                    </p>
+                  )}
                 </div>
               </div>
             </div>
 
             {/* Description */}
             <div className="py-6 border-b">
-              <p className="text-gray-700 leading-relaxed">
+              <p className="text-gray-700 leading-relaxed whitespace-pre-line">
                 {accommodation.description}
               </p>
-              <button className="mt-4 flex items-center gap-2 font-semibold text-gray-900 underline">
-                Show more
-                <ChevronRight className="w-4 h-4" />
-              </button>
             </div>
 
             {/* Amenities */}
@@ -275,24 +355,29 @@ export const AccommodationDetail = () => {
               <h2 className="text-xl font-semibold text-gray-900 mb-4">
                 What this place offers
               </h2>
-              <div className="grid grid-cols-2 gap-4">
-                {displayedAmenities.map((amenityId) => {
-                  const amenity = amenities.find((a) => a.id === amenityId);
-                  if (!amenity) return null;
-                  return (
-                    <div key={amenityId} className="flex items-center gap-3">
+              {accommodation.amenities.length === 0 ? (
+                <p className="text-gray-600">
+                  No amenities listed for this stay yet.
+                </p>
+              ) : (
+                <div className="grid grid-cols-2 gap-4">
+                  {displayedAmenities.map((amenity) => (
+                    <div
+                      key={amenity.id}
+                      className="flex items-center gap-3"
+                    >
                       <Check className="w-5 h-5 text-gray-700" />
                       <span className="text-gray-700">{amenity.name}</span>
                     </div>
-                  );
-                })}
-              </div>
+                  ))}
+                </div>
+              )}
               {accommodation.amenities.length > 10 && (
                 <button
                   onClick={() => setShowAllAmenities(!showAllAmenities)}
                   className="mt-6 px-6 py-3 border border-gray-900 rounded-lg font-semibold text-gray-900 hover:bg-gray-50 transition-colors"
                 >
-                  Show {showAllAmenities ? 'less' : 'all 20+ amenities'}
+                  Show {showAllAmenities ? 'less' : `all ${accommodation.amenities.length} amenities`}
                 </button>
               )}
             </div>
@@ -302,43 +387,50 @@ export const AccommodationDetail = () => {
               <div className="flex items-center gap-2 mb-6">
                 <Star className="w-6 h-6 fill-primary text-primary" />
                 <h2 className="text-xl font-semibold text-gray-900">
-                  {accommodation.rating.toFixed(2)} · {accommodation.reviewCount} reviews
+                  {ratingAverage !== null ? ratingAverage.toFixed(2) : 'New'} ·{' '}
+                  {ratingCount} reviews
                 </h2>
               </div>
 
-              {/* Rating Categories */}
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-8">
-                {[
-                  { label: 'Cleanliness', value: 4.9 },
-                  { label: 'Accuracy', value: 4.8 },
-                  { label: 'Check-in', value: 4.9 },
-                  { label: 'Communication', value: 5.0 },
-                  { label: 'Location', value: 4.7 },
-                  { label: 'Value', value: 4.8 },
-                ].map((category) => (
-                  <div key={category.label} className="flex items-center justify-between">
-                    <span className="text-gray-700">{category.label}</span>
-                    <div className="flex items-center gap-2">
-                      <div className="w-20 h-1 bg-gray-200 rounded-full overflow-hidden">
-                        <div
-                          className="h-full bg-gray-900"
-                          style={{ width: `${(category.value / 5) * 100}%` }}
-                        />
+              {/* Rating Categories — derived from real reviews */}
+              {categoryAverages && categoryAverages.length > 0 && (
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-8">
+                  {categoryAverages.map((category) => (
+                    <div
+                      key={category.label}
+                      className="flex items-center justify-between"
+                    >
+                      <span className="text-gray-700">{category.label}</span>
+                      <div className="flex items-center gap-2">
+                        <div className="w-20 h-1 bg-gray-200 rounded-full overflow-hidden">
+                          <div
+                            className="h-full bg-gray-900"
+                            style={{
+                              width: `${(category.value / 5) * 100}%`,
+                            }}
+                          />
+                        </div>
+                        <span className="text-sm text-gray-700">
+                          {category.value.toFixed(1)}
+                        </span>
                       </div>
-                      <span className="text-sm text-gray-700">
-                        {category.value.toFixed(1)}
-                      </span>
                     </div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              )}
 
               {/* Review Cards */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {displayedReviews.map((review) => (
-                  <ReviewCard key={review.id} review={review} />
-                ))}
-              </div>
+              {accommodation.reviews.length === 0 ? (
+                <p className="text-gray-600">
+                  No reviews yet — be the first to leave one after your stay.
+                </p>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {displayedReviews.map((review) => (
+                    <ReviewCard key={review.id} review={review} />
+                  ))}
+                </div>
+              )}
 
               {accommodation.reviews.length > 6 && (
                 <button
@@ -365,8 +457,7 @@ export const AccommodationDetail = () => {
                 {accommodation.location.city}, {accommodation.location.country}
               </p>
               <p className="text-gray-600 mt-2">
-                Located in a vibrant neighborhood with easy access to local
-                attractions, restaurants, and public transportation.
+                {accommodation.location.address}
               </p>
             </div>
           </div>
@@ -407,3 +498,4 @@ const GridIcon = ({ className }: { className?: string }) => (
     <rect x="3" y="14" width="7" height="7" />
   </svg>
 );
+

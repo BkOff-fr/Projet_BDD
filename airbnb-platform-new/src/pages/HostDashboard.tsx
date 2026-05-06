@@ -1,11 +1,10 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Home,
   Calendar,
   DollarSign,
   Star,
-  TrendingUp,
   Plus,
   Edit,
   Eye,
@@ -13,13 +12,25 @@ import {
   ChevronRight,
   BarChart3,
   Users,
-  Clock,
 } from 'lucide-react';
-import { HostPropertyForm } from '@/components';
-import { accommodations, bookings } from '@/data/mockData';
+import {
+  HostPropertyForm,
+  LoadingState,
+  ErrorState,
+} from '@/components';
+import { hostAPI } from '@/services/api';
 import { cn } from '@/utils/cn';
-import { formatCurrency, formatDate } from '@/utils/helpers';
-import type { User, Accommodation } from '@/types';
+import {
+  formatCurrency,
+  formatDate,
+  PLACEHOLDER_IMAGE,
+} from '@/utils/helpers';
+import type {
+  User,
+  HostDashboardData,
+  HostProperty,
+  Accommodation,
+} from '@/types';
 
 interface HostDashboardProps {
   user: User;
@@ -27,44 +38,94 @@ interface HostDashboardProps {
 
 export const HostDashboard = ({ user }: HostDashboardProps) => {
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState<'overview' | 'listings' | 'bookings' | 'earnings'>('overview');
+  const [activeTab, setActiveTab] = useState<
+    'overview' | 'listings' | 'bookings' | 'earnings'
+  >('overview');
   const [showPropertyForm, setShowPropertyForm] = useState(false);
-  const [editingProperty, setEditingProperty] = useState<Accommodation | undefined>();
+  const [editingProperty, setEditingProperty] = useState<
+    Accommodation | undefined
+  >();
 
-  // Get host's listings
-  const hostListings = accommodations.filter((a) => a.hostId === user.id);
+  const [dashboard, setDashboard] = useState<HostDashboardData | null>(null);
+  const [properties, setProperties] = useState<HostProperty[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
 
-  // Get bookings for host's listings
-  const hostBookings = bookings.filter((b) =>
-    hostListings.some((l) => l.id === b.accommodationId)
-  );
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+    Promise.all([hostAPI.getDashboard(), hostAPI.getProperties()])
+      .then(([dash, props]) => {
+        if (cancelled) return;
+        setDashboard(dash);
+        setProperties(props);
+        setLoading(false);
+      })
+      .catch((err: Error) => {
+        if (cancelled) return;
+        setError(err.message);
+        setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [reloadKey]);
 
-  // Calculate stats
-  const totalEarnings = hostBookings
-    .filter((b) => b.status === 'completed' || b.status === 'confirmed')
-    .reduce((acc, b) => acc + b.totalPrice, 0);
+  if (loading) {
+    return <LoadingState label="Loading host dashboard..." />;
+  }
 
-  const totalReviews = hostListings.reduce((acc, l) => acc + l.reviewCount, 0);
-  const averageRating =
-    hostListings.reduce((acc, l) => acc + l.rating, 0) / hostListings.length || 0;
+  if (error || !dashboard) {
+    return (
+      <ErrorState
+        message={error ?? 'Could not load your dashboard.'}
+        onRetry={() => setReloadKey((k) => k + 1)}
+      />
+    );
+  }
 
   const tabs = [
-    { id: 'overview', label: 'Overview', icon: BarChart3 },
-    { id: 'listings', label: 'Listings', icon: Home },
-    { id: 'bookings', label: 'Bookings', icon: Calendar },
-    { id: 'earnings', label: 'Earnings', icon: DollarSign },
+    { id: 'overview' as const, label: 'Overview', icon: BarChart3 },
+    { id: 'listings' as const, label: 'Listings', icon: Home },
+    { id: 'bookings' as const, label: 'Bookings', icon: Calendar },
+    { id: 'earnings' as const, label: 'Earnings', icon: DollarSign },
   ];
 
-  const handleCreateListing = (propertyData: Partial<Accommodation>) => {
-    console.log('Creating listing:', propertyData);
+  const handleCreateListing = (_propertyData: Partial<Accommodation>) => {
+    // TODO: wire to accommodationsAPI.create when the form's payload shape
+    // matches `CreateAccommodationInput`. See P0 task list.
     setShowPropertyForm(false);
-    // In a real app, this would create the listing
+    setEditingProperty(undefined);
   };
 
-  const handleEditListing = (property: Accommodation) => {
-    setEditingProperty(property);
+  const handleEditListing = (property: HostProperty) => {
+    // The form expects a frontend-shaped Accommodation; cast for now until
+    // the form is reworked against HostProperty.
+    setEditingProperty(property as unknown as Accommodation);
     setShowPropertyForm(true);
   };
+
+  const totalEarnings = Number(dashboard.earnings.total);
+  const completedEarnings = Number(dashboard.earnings.completed_earnings);
+  const avgRating = dashboard.rating.avg_rating
+    ? Number(dashboard.rating.avg_rating)
+    : 0;
+  const totalReviews = dashboard.rating.total_reviews;
+
+  // Compute tallest bar for relative scaling. Coerce earnings to number.
+  const monthly = dashboard.monthlyStats.map((m) => ({
+    month: m.month,
+    bookings: Number(m.bookings),
+    earnings: Number(m.earnings),
+  }));
+  const maxEarnings = monthly.reduce(
+    (max, m) => (m.earnings > max ? m.earnings : max),
+    0
+  );
+
+  const recent = dashboard.recentBookings;
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -74,7 +135,8 @@ export const HostDashboard = ({ user }: HostDashboardProps) => {
           <div>
             <h1 className="text-3xl font-bold text-gray-900">Host Dashboard</h1>
             <p className="text-gray-600 mt-1">
-              Welcome back, {user.firstName}! Here&apos;s what&apos;s happening with your listings.
+              Welcome back, {user.firstName}! Here&apos;s what&apos;s happening
+              with your listings.
             </p>
           </div>
           <button
@@ -96,10 +158,6 @@ export const HostDashboard = ({ user }: HostDashboardProps) => {
               <div className="w-12 h-12 bg-primary/10 rounded-lg flex items-center justify-center">
                 <DollarSign className="w-6 h-6 text-primary" />
               </div>
-              <span className="text-sm text-green-600 font-medium flex items-center gap-1">
-                <TrendingUp className="w-4 h-4" />
-                +12%
-              </span>
             </div>
             <p className="text-gray-600 text-sm">Total Earnings</p>
             <p className="text-2xl font-bold text-gray-900">
@@ -114,7 +172,9 @@ export const HostDashboard = ({ user }: HostDashboardProps) => {
               </div>
             </div>
             <p className="text-gray-600 text-sm">Active Listings</p>
-            <p className="text-2xl font-bold text-gray-900">{hostListings.length}</p>
+            <p className="text-2xl font-bold text-gray-900">
+              {dashboard.properties.total}
+            </p>
           </div>
 
           <div className="bg-white rounded-xl p-6 shadow-card">
@@ -125,7 +185,7 @@ export const HostDashboard = ({ user }: HostDashboardProps) => {
             </div>
             <p className="text-gray-600 text-sm">Average Rating</p>
             <p className="text-2xl font-bold text-gray-900">
-              {averageRating.toFixed(2)}
+              {avgRating > 0 ? avgRating.toFixed(2) : '—'}
             </p>
           </div>
 
@@ -147,7 +207,7 @@ export const HostDashboard = ({ user }: HostDashboardProps) => {
               {tabs.map((tab) => (
                 <button
                   key={tab.id}
-                  onClick={() => setActiveTab(tab.id as typeof activeTab)}
+                  onClick={() => setActiveTab(tab.id)}
                   className={cn(
                     'flex items-center gap-2 px-6 py-4 text-sm font-medium transition-colors relative',
                     activeTab === tab.id
@@ -183,46 +243,55 @@ export const HostDashboard = ({ user }: HostDashboardProps) => {
                       <ChevronRight className="w-4 h-4" />
                     </button>
                   </div>
-                  <div className="space-y-3">
-                    {hostBookings.slice(0, 3).map((booking) => (
-                      <div
-                        key={booking.id}
-                        className="flex items-center gap-4 p-4 bg-gray-50 rounded-lg"
-                      >
-                        <img
-                          src={booking.accommodation.images[0]}
-                          alt={booking.accommodation.title}
-                          className="w-16 h-16 rounded-lg object-cover"
-                        />
-                        <div className="flex-1">
-                          <p className="font-semibold text-gray-900">
-                            {booking.accommodation.title}
-                          </p>
-                          <p className="text-sm text-gray-600">
-                            {formatDate(booking.checkIn, 'MMM d')} -{' '}
-                            {formatDate(booking.checkOut, 'MMM d, yyyy')}
-                          </p>
+                  {recent.length === 0 ? (
+                    <p className="text-gray-600">No bookings yet.</p>
+                  ) : (
+                    <div className="space-y-3">
+                      {recent.slice(0, 3).map((booking) => (
+                        <div
+                          key={booking.id}
+                          className="flex items-center gap-4 p-4 bg-gray-50 rounded-lg"
+                        >
+                          <img
+                            src={PLACEHOLDER_IMAGE}
+                            alt={booking.accommodation_title}
+                            className="w-16 h-16 rounded-lg object-cover"
+                          />
+                          <div className="flex-1">
+                            <p className="font-semibold text-gray-900">
+                              {booking.accommodation_title}
+                            </p>
+                            <p className="text-sm text-gray-600">
+                              {formatDate(booking.check_in_date, 'MMM d')} -{' '}
+                              {formatDate(
+                                booking.check_out_date,
+                                'MMM d, yyyy'
+                              )}
+                            </p>
+                          </div>
+                          <div className="text-right">
+                            <p className="font-semibold text-gray-900">
+                              {formatCurrency(
+                                Number(booking.total_price ?? 0)
+                              )}
+                            </p>
+                            <span
+                              className={cn(
+                                'text-xs px-2 py-1 rounded-full',
+                                booking.status === 'confirmed'
+                                  ? 'bg-green-100 text-green-700'
+                                  : booking.status === 'pending'
+                                  ? 'bg-yellow-100 text-yellow-700'
+                                  : 'bg-gray-100 text-gray-700'
+                              )}
+                            >
+                              {booking.status}
+                            </span>
+                          </div>
                         </div>
-                        <div className="text-right">
-                          <p className="font-semibold text-gray-900">
-                            {formatCurrency(booking.totalPrice)}
-                          </p>
-                          <span
-                            className={cn(
-                              'text-xs px-2 py-1 rounded-full',
-                              booking.status === 'confirmed'
-                                ? 'bg-green-100 text-green-700'
-                                : booking.status === 'pending'
-                                ? 'bg-yellow-100 text-yellow-700'
-                                : 'bg-gray-100 text-gray-700'
-                            )}
-                          >
-                            {booking.status}
-                          </span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
 
                 {/* Quick Actions */}
@@ -236,16 +305,24 @@ export const HostDashboard = ({ user }: HostDashboardProps) => {
                       className="p-4 border border-gray-200 rounded-lg hover:border-primary hover:bg-primary/5 transition-colors text-left"
                     >
                       <Plus className="w-6 h-6 text-primary mb-2" />
-                      <p className="font-semibold text-gray-900">Add New Listing</p>
-                      <p className="text-sm text-gray-600">Create a new property listing</p>
+                      <p className="font-semibold text-gray-900">
+                        Add New Listing
+                      </p>
+                      <p className="text-sm text-gray-600">
+                        Create a new property listing
+                      </p>
                     </button>
                     <button
                       onClick={() => setActiveTab('listings')}
                       className="p-4 border border-gray-200 rounded-lg hover:border-primary hover:bg-primary/5 transition-colors text-left"
                     >
                       <Edit className="w-6 h-6 text-primary mb-2" />
-                      <p className="font-semibold text-gray-900">Manage Listings</p>
-                      <p className="text-sm text-gray-600">Edit your existing properties</p>
+                      <p className="font-semibold text-gray-900">
+                        Manage Listings
+                      </p>
+                      <p className="text-sm text-gray-600">
+                        Edit your existing properties
+                      </p>
                     </button>
                     <button
                       onClick={() => navigate('/messages')}
@@ -253,7 +330,9 @@ export const HostDashboard = ({ user }: HostDashboardProps) => {
                     >
                       <MessageSquare className="w-6 h-6 text-primary mb-2" />
                       <p className="font-semibold text-gray-900">Messages</p>
-                      <p className="text-sm text-gray-600">View guest messages</p>
+                      <p className="text-sm text-gray-600">
+                        View guest messages
+                      </p>
                     </button>
                   </div>
                 </div>
@@ -267,54 +346,72 @@ export const HostDashboard = ({ user }: HostDashboardProps) => {
                     Your Listings
                   </h3>
                 </div>
-                <div className="grid grid-cols-1 gap-4">
-                  {hostListings.map((listing) => (
-                    <div
-                      key={listing.id}
-                      className="flex items-center gap-4 p-4 border border-gray-200 rounded-lg hover:shadow-md transition-shadow"
-                    >
-                      <img
-                        src={listing.images[0]}
-                        alt={listing.title}
-                        className="w-24 h-24 rounded-lg object-cover"
-                      />
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-1">
-                          <Star className="w-4 h-4 fill-primary text-primary" />
-                          <span className="font-semibold">
-                            {listing.rating.toFixed(2)}
-                          </span>
-                          <span className="text-gray-500">
-                            ({listing.reviewCount} reviews)
-                          </span>
+                {properties.length === 0 ? (
+                  <p className="text-gray-600">
+                    You haven&apos;t created any listings yet.
+                  </p>
+                ) : (
+                  <div className="grid grid-cols-1 gap-4">
+                    {properties.map((listing) => {
+                      const avg = listing.avg_rating
+                        ? Number(listing.avg_rating)
+                        : null;
+                      return (
+                        <div
+                          key={listing.id}
+                          className="flex items-center gap-4 p-4 border border-gray-200 rounded-lg hover:shadow-md transition-shadow"
+                        >
+                          <img
+                            src={PLACEHOLDER_IMAGE}
+                            alt={listing.title}
+                            className="w-24 h-24 rounded-lg object-cover"
+                          />
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 mb-1">
+                              <Star className="w-4 h-4 fill-primary text-primary" />
+                              <span className="font-semibold">
+                                {avg !== null ? avg.toFixed(2) : 'New'}
+                              </span>
+                              <span className="text-gray-500">
+                                ({listing.review_count} reviews)
+                              </span>
+                            </div>
+                            <p className="font-semibold text-gray-900">
+                              {listing.title}
+                            </p>
+                            <p className="text-sm text-gray-600">
+                              {listing.city}, {listing.country}
+                            </p>
+                            <p className="text-primary font-semibold mt-1">
+                              {formatCurrency(
+                                Number(listing.price_per_night)
+                              )}{' '}
+                              / night
+                            </p>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() =>
+                                navigate(`/listing/${listing.id}`)
+                              }
+                              className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg"
+                              title="View"
+                            >
+                              <Eye className="w-5 h-5" />
+                            </button>
+                            <button
+                              onClick={() => handleEditListing(listing)}
+                              className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg"
+                              title="Edit"
+                            >
+                              <Edit className="w-5 h-5" />
+                            </button>
+                          </div>
                         </div>
-                        <p className="font-semibold text-gray-900">{listing.title}</p>
-                        <p className="text-sm text-gray-600">
-                          {listing.location.city}, {listing.location.country}
-                        </p>
-                        <p className="text-primary font-semibold mt-1">
-                          {formatCurrency(listing.pricePerNight)} / night
-                        </p>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <button
-                          onClick={() => navigate(`/listing/${listing.id}`)}
-                          className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg"
-                          title="View"
-                        >
-                          <Eye className="w-5 h-5" />
-                        </button>
-                        <button
-                          onClick={() => handleEditListing(listing)}
-                          className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg"
-                          title="Edit"
-                        >
-                          <Edit className="w-5 h-5" />
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             )}
 
@@ -322,85 +419,91 @@ export const HostDashboard = ({ user }: HostDashboardProps) => {
               <div>
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="text-lg font-semibold text-gray-900">
-                    All Bookings
+                    Recent Bookings
                   </h3>
                 </div>
-                <div className="overflow-x-auto">
-                  <table className="w-full">
-                    <thead>
-                      <tr className="border-b border-gray-200">
-                        <th className="text-left py-3 px-4 font-semibold text-gray-700">
-                          Property
-                        </th>
-                        <th className="text-left py-3 px-4 font-semibold text-gray-700">
-                          Guest
-                        </th>
-                        <th className="text-left py-3 px-4 font-semibold text-gray-700">
-                          Dates
-                        </th>
-                        <th className="text-left py-3 px-4 font-semibold text-gray-700">
-                          Amount
-                        </th>
-                        <th className="text-left py-3 px-4 font-semibold text-gray-700">
-                          Status
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {hostBookings.map((booking) => (
-                        <tr key={booking.id} className="border-b border-gray-100">
-                          <td className="py-4 px-4">
-                            <div className="flex items-center gap-3">
-                              <img
-                                src={booking.accommodation.images[0]}
-                                alt={booking.accommodation.title}
-                                className="w-12 h-12 rounded-lg object-cover"
-                              />
-                              <span className="font-medium text-gray-900 truncate max-w-[150px]">
-                                {booking.accommodation.title}
-                              </span>
-                            </div>
-                          </td>
-                          <td className="py-4 px-4">
-                            <div className="flex items-center gap-2">
-                              <img
-                                src={booking.guest.avatar}
-                                alt={booking.guest.firstName}
-                                className="w-8 h-8 rounded-full object-cover"
-                              />
-                              <span className="text-gray-700">
-                                {booking.guest.firstName}
-                              </span>
-                            </div>
-                          </td>
-                          <td className="py-4 px-4 text-gray-700">
-                            {formatDate(booking.checkIn, 'MMM d')} -{' '}
-                            {formatDate(booking.checkOut, 'MMM d')}
-                          </td>
-                          <td className="py-4 px-4 font-medium text-gray-900">
-                            {formatCurrency(booking.totalPrice)}
-                          </td>
-                          <td className="py-4 px-4">
-                            <span
-                              className={cn(
-                                'text-xs px-3 py-1 rounded-full font-medium',
-                                booking.status === 'confirmed'
-                                  ? 'bg-green-100 text-green-700'
-                                  : booking.status === 'pending'
-                                  ? 'bg-yellow-100 text-yellow-700'
-                                  : booking.status === 'completed'
-                                  ? 'bg-blue-100 text-blue-700'
-                                  : 'bg-gray-100 text-gray-700'
-                              )}
-                            >
-                              {booking.status}
-                            </span>
-                          </td>
+                {/* TODO: drill into per-property bookings via
+                    `hostAPI.getPropertyBookings(propertyId)`. For now we show
+                    the dashboard's recent bookings list. */}
+                {recent.length === 0 ? (
+                  <p className="text-gray-600">No bookings yet.</p>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full">
+                      <thead>
+                        <tr className="border-b border-gray-200">
+                          <th className="text-left py-3 px-4 font-semibold text-gray-700">
+                            Property
+                          </th>
+                          <th className="text-left py-3 px-4 font-semibold text-gray-700">
+                            Guest
+                          </th>
+                          <th className="text-left py-3 px-4 font-semibold text-gray-700">
+                            Dates
+                          </th>
+                          <th className="text-left py-3 px-4 font-semibold text-gray-700">
+                            Amount
+                          </th>
+                          <th className="text-left py-3 px-4 font-semibold text-gray-700">
+                            Status
+                          </th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                      </thead>
+                      <tbody>
+                        {recent.map((booking) => (
+                          <tr
+                            key={booking.id}
+                            className="border-b border-gray-100"
+                          >
+                            <td className="py-4 px-4">
+                              <div className="flex items-center gap-3">
+                                <img
+                                  src={PLACEHOLDER_IMAGE}
+                                  alt={booking.accommodation_title}
+                                  className="w-12 h-12 rounded-lg object-cover"
+                                />
+                                <span className="font-medium text-gray-900 truncate max-w-[150px]">
+                                  {booking.accommodation_title}
+                                </span>
+                              </div>
+                            </td>
+                            <td className="py-4 px-4">
+                              <span className="text-gray-700">
+                                {booking.guest_first_name}{' '}
+                                {booking.guest_last_name}
+                              </span>
+                            </td>
+                            <td className="py-4 px-4 text-gray-700">
+                              {formatDate(booking.check_in_date, 'MMM d')} -{' '}
+                              {formatDate(booking.check_out_date, 'MMM d')}
+                            </td>
+                            <td className="py-4 px-4 font-medium text-gray-900">
+                              {formatCurrency(
+                                Number(booking.total_price ?? 0)
+                              )}
+                            </td>
+                            <td className="py-4 px-4">
+                              <span
+                                className={cn(
+                                  'text-xs px-3 py-1 rounded-full font-medium',
+                                  booking.status === 'confirmed'
+                                    ? 'bg-green-100 text-green-700'
+                                    : booking.status === 'pending'
+                                    ? 'bg-yellow-100 text-yellow-700'
+                                    : booking.status === 'completed'
+                                    ? 'bg-blue-100 text-blue-700'
+                                    : 'bg-gray-100 text-gray-700'
+                                )}
+                              >
+                                {booking.status}
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
               </div>
             )}
 
@@ -408,21 +511,21 @@ export const HostDashboard = ({ user }: HostDashboardProps) => {
               <div className="space-y-6">
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   <div className="bg-green-50 rounded-lg p-4">
-                    <p className="text-green-700 text-sm">This Month</p>
+                    <p className="text-green-700 text-sm">Completed earnings</p>
                     <p className="text-2xl font-bold text-green-900">
-                      {formatCurrency(totalEarnings * 0.3)}
+                      {formatCurrency(completedEarnings)}
                     </p>
                   </div>
                   <div className="bg-blue-50 rounded-lg p-4">
-                    <p className="text-blue-700 text-sm">This Year</p>
+                    <p className="text-blue-700 text-sm">Total earnings</p>
                     <p className="text-2xl font-bold text-blue-900">
                       {formatCurrency(totalEarnings)}
                     </p>
                   </div>
                   <div className="bg-purple-50 rounded-lg p-4">
-                    <p className="text-purple-700 text-sm">All Time</p>
+                    <p className="text-purple-700 text-sm">Total bookings</p>
                     <p className="text-2xl font-bold text-purple-900">
-                      {formatCurrency(totalEarnings * 1.5)}
+                      {dashboard.bookings.total}
                     </p>
                   </div>
                 </div>
@@ -431,9 +534,40 @@ export const HostDashboard = ({ user }: HostDashboardProps) => {
                   <h4 className="font-semibold text-gray-900 mb-4">
                     Earnings Overview
                   </h4>
-                  <div className="h-64 bg-gray-100 rounded-lg flex items-center justify-center">
-                    <p className="text-gray-500">Chart visualization would go here</p>
-                  </div>
+                  {monthly.length === 0 ? (
+                    <p className="text-gray-600 text-sm">
+                      No monthly stats yet.
+                    </p>
+                  ) : (
+                    <div className="flex items-end gap-2 h-64 px-2">
+                      {monthly.map((m) => {
+                        const heightPct =
+                          maxEarnings > 0
+                            ? Math.max(2, (m.earnings / maxEarnings) * 100)
+                            : 2;
+                        return (
+                          <div
+                            key={m.month}
+                            className="flex-1 flex flex-col items-center justify-end gap-2"
+                          >
+                            <div
+                              className="w-full bg-primary/20 hover:bg-primary/40 transition-colors rounded-t-md relative group"
+                              style={{ height: `${heightPct}%` }}
+                            >
+                              <div className="absolute inset-x-0 -top-7 text-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                <span className="text-xs text-gray-700 bg-white shadow rounded px-1 py-0.5">
+                                  {formatCurrency(m.earnings)}
+                                </span>
+                              </div>
+                            </div>
+                            <span className="text-[10px] text-gray-500">
+                              {m.month}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
               </div>
             )}
@@ -446,7 +580,11 @@ export const HostDashboard = ({ user }: HostDashboardProps) => {
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div className="w-full max-w-2xl max-h-[90vh] overflow-y-auto">
             <HostPropertyForm
-              property={editingProperty}
+              // The form drafts a `CreateAccommodationInput` payload while
+              // `editingProperty` is a frontend `Accommodation` (with
+              // `cleaningFee: number | null`). Cast through unknown until
+              // the form's edit-mode is reworked against the API shape.
+              property={editingProperty as unknown as undefined}
               onSubmit={handleCreateListing}
               onCancel={() => {
                 setShowPropertyForm(false);

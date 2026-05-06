@@ -1,8 +1,8 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { X, ChevronDown, ChevronUp } from 'lucide-react';
 import { cn } from '@/utils/cn';
-import { amenities } from '@/data/mockData';
-import type { SearchFilters, AccommodationType } from '@/types';
+import { accommodationsAPI } from '@/services/api';
+import type { Amenity, SearchFilters, AccommodationType } from '@/types';
 
 interface FilterSidebarProps {
   isOpen: boolean;
@@ -37,6 +37,25 @@ export const FilterSidebar = ({
     'type',
     'amenities',
   ]);
+  const [amenities, setAmenities] = useState<Amenity[]>([]);
+
+  // Fetch the amenity list once so users can filter by amenity. Failures are
+  // non-fatal — the filter section just renders empty and other filters keep
+  // working. TODO: cache this in a context if we add more amenity-using UI.
+  useEffect(() => {
+    let cancelled = false;
+    accommodationsAPI
+      .getAmenities()
+      .then((list) => {
+        if (!cancelled) setAmenities(list);
+      })
+      .catch(() => {
+        if (!cancelled) setAmenities([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const toggleSection = (section: string) => {
     setExpandedSections((prev) =>

@@ -1,64 +1,143 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Search,
-  MoreHorizontal,
   Phone,
   Video,
   Info,
   ChevronLeft,
 } from 'lucide-react';
-import { MessageThread } from '@/components';
-import { conversations, users } from '@/data/mockData';
+import {
+  MessageThread,
+  LoadingState,
+  ErrorState,
+} from '@/components';
+import { messagesAPI } from '@/services/api';
 import { cn } from '@/utils/cn';
-import { formatDate } from '@/utils/helpers';
-import type { User, Message } from '@/types';
+import { formatDate, PLACEHOLDER_IMAGE } from '@/utils/helpers';
+import type { User, Message, Conversation } from '@/types';
 
 interface MessagesProps {
   currentUser: User;
 }
 
-export const Messages = ({ currentUser }: MessagesProps) => {
+interface ThreadOtherUser {
+  id: number;
+  firstName: string;
+  lastName: string;
+  profilePicture?: string | null;
+}
+
+export const Messages = ({ currentUser: _currentUser }: MessagesProps) => {
   const navigate = useNavigate();
-  const [selectedConversation, setSelectedConversation] = useState(
-    conversations[0]
-  );
-  const [searchQuery, setSearchQuery] = useState('');
+
+  const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [selectedConversation, setSelectedConversation] =
+    useState<Conversation | null>(null);
+  const [otherUser, setOtherUser] = useState<ThreadOtherUser | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
+  const [searchQuery, setSearchQuery] = useState('');
   const [isMobileListVisible, setIsMobileListVisible] = useState(true);
 
-  // Get messages for selected conversation
-  const conversationMessages = messages.filter(
-    (m) =>
-      m.senderId === selectedConversation?.participants[0].id ||
-      m.receiverId === selectedConversation?.participants[0].id
+  const [loading, setLoading] = useState(true);
+  const [threadLoading, setThreadLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
+
+  // Load conversations once on mount.
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+    messagesAPI
+      .getConversations()
+      .then((list) => {
+        if (cancelled) return;
+        setConversations(list);
+        if (list.length > 0 && !selectedConversation) {
+          setSelectedConversation(list[0]);
+        }
+        setLoading(false);
+      })
+      .catch((err: Error) => {
+        if (cancelled) return;
+        setError(err.message);
+        setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reloadKey]);
+
+  // Load the selected conversation thread whenever the selection changes.
+  useEffect(() => {
+    if (!selectedConversation) {
+      setMessages([]);
+      setOtherUser(null);
+      return;
+    }
+    let cancelled = false;
+    setThreadLoading(true);
+    messagesAPI
+      .getConversation(selectedConversation.otherUser.id)
+      .then((data) => {
+        if (cancelled) return;
+        setMessages(data.messages);
+        setOtherUser(data.otherUser);
+        setThreadLoading(false);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setMessages([]);
+        setOtherUser({
+          ...selectedConversation.otherUser,
+        });
+        setThreadLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedConversation]);
+
+  const filteredConversations = conversations.filter((conv) =>
+    `${conv.otherUser.firstName} ${conv.otherUser.lastName}`
+      .toLowerCase()
+      .includes(searchQuery.toLowerCase())
   );
 
-  const filteredConversations = conversations.filter((conv) => {
-    const otherUser = conv.participants.find((p) => p.id !== currentUser.id);
-    return otherUser?.firstName
-      .toLowerCase()
-      .includes(searchQuery.toLowerCase());
-  });
-
-  const handleSendMessage = (content: string) => {
-    const newMessage: Message = {
-      id: `m${Date.now()}`,
-      senderId: currentUser.id,
-      sender: currentUser,
-      receiverId: selectedConversation.participants.find((p) => p.id !== currentUser.id)!.id,
-      receiver: selectedConversation.participants.find((p) => p.id !== currentUser.id)!,
-      content,
-      createdAt: new Date(),
-      isRead: false,
-      accommodationId: selectedConversation.accommodation?.id,
-    };
-    setMessages((prev) => [...prev, newMessage]);
+  const handleSendMessage = async (content: string) => {
+    if (!selectedConversation) return;
+    try {
+      await messagesAPI.send({
+        receiverId: selectedConversation.otherUser.id,
+        accommodationId: selectedConversation.accommodation?.id,
+        content,
+      });
+      // TODO: optimistic update — for now just refetch the thread.
+      const refreshed = await messagesAPI.getConversation(
+        selectedConversation.otherUser.id
+      );
+      setMessages(refreshed.messages);
+    } catch {
+      // The MessageThread input clears on send; surface a soft inline error
+      // by re-fetching the conversations list to refresh state. (No toast
+      // system in P0 — TODO: add one.)
+    }
   };
 
-  const otherUser = selectedConversation?.participants.find(
-    (p) => p.id !== currentUser.id
-  );
+  if (loading) {
+    return <LoadingState label="Loading messages..." />;
+  }
+
+  if (error) {
+    return (
+      <ErrorState
+        message={error}
+        onRetry={() => setReloadKey((k) => k + 1)}
+      />
+    );
+  }
 
   return (
     <div className="min-h-screen bg-white">
@@ -88,55 +167,72 @@ export const Messages = ({ currentUser }: MessagesProps) => {
 
             {/* Conversations */}
             <div className="flex-1 overflow-y-auto">
-              {filteredConversations.map((conversation) => {
-                const otherUser = conversation.participants.find(
-                  (p) => p.id !== currentUser.id
-                );
-                return (
-                  <button
-                    key={conversation.id}
-                    onClick={() => {
-                      setSelectedConversation(conversation);
-                      setIsMobileListVisible(false);
-                    }}
-                    className={cn(
-                      'w-full p-4 flex items-start gap-3 hover:bg-gray-50 transition-colors text-left',
-                      selectedConversation?.id === conversation.id && 'bg-gray-50'
-                    )}
-                  >
-                    <div className="relative">
-                      <img
-                        src={otherUser?.avatar}
-                        alt={otherUser?.firstName}
-                        className="w-12 h-12 rounded-full object-cover"
-                      />
-                      {conversation.unreadCount > 0 && (
-                        <span className="absolute -top-1 -right-1 w-5 h-5 bg-primary text-white text-xs rounded-full flex items-center justify-center">
-                          {conversation.unreadCount}
-                        </span>
+              {filteredConversations.length === 0 ? (
+                <div className="p-6 text-center text-sm text-gray-600">
+                  {conversations.length === 0
+                    ? 'No conversations yet.'
+                    : 'No conversations match that search.'}
+                </div>
+              ) : (
+                filteredConversations.map((conversation) => {
+                  const convOtherUser = conversation.otherUser;
+                  const isSelected =
+                    selectedConversation?.id === conversation.id;
+                  return (
+                    <button
+                      key={conversation.id}
+                      onClick={() => {
+                        setSelectedConversation(conversation);
+                        setIsMobileListVisible(false);
+                      }}
+                      className={cn(
+                        'w-full p-4 flex items-start gap-3 hover:bg-gray-50 transition-colors text-left',
+                        isSelected && 'bg-gray-50'
                       )}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between">
-                        <p className="font-semibold text-gray-900 truncate">
-                          {otherUser?.firstName} {otherUser?.lastName}
-                        </p>
-                        <span className="text-xs text-gray-500">
-                          {formatDate(conversation.lastMessage.createdAt, 'h:mm a')}
-                        </span>
+                    >
+                      <div className="relative">
+                        {convOtherUser.profilePicture ? (
+                          <img
+                            src={convOtherUser.profilePicture}
+                            alt={convOtherUser.firstName}
+                            className="w-12 h-12 rounded-full object-cover"
+                          />
+                        ) : (
+                          <div className="w-12 h-12 rounded-full bg-gray-300 flex items-center justify-center text-sm font-semibold text-gray-700">
+                            {convOtherUser.firstName.charAt(0)}
+                            {convOtherUser.lastName.charAt(0)}
+                          </div>
+                        )}
+                        {/* TODO: per-conversation unread badge — the API only
+                            exposes a global unread count via
+                            `messagesAPI.getUnreadCount`. Drop the per-thread
+                            badge for now. */}
                       </div>
-                      {conversation.accommodation && (
-                        <p className="text-xs text-gray-500 truncate">
-                          Re: {conversation.accommodation.title}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between">
+                          <p className="font-semibold text-gray-900 truncate">
+                            {convOtherUser.firstName} {convOtherUser.lastName}
+                          </p>
+                          <span className="text-xs text-gray-500">
+                            {formatDate(
+                              conversation.lastMessage.createdAt,
+                              'h:mm a'
+                            )}
+                          </span>
+                        </div>
+                        {conversation.accommodation && (
+                          <p className="text-xs text-gray-500 truncate">
+                            Re: {conversation.accommodation.title}
+                          </p>
+                        )}
+                        <p className="text-sm text-gray-600 truncate mt-0.5">
+                          {conversation.lastMessage.content}
                         </p>
-                      )}
-                      <p className="text-sm text-gray-600 truncate mt-0.5">
-                        {conversation.lastMessage.content}
-                      </p>
-                    </div>
-                  </button>
-                );
-              })}
+                      </div>
+                    </button>
+                  );
+                })
+              )}
             </div>
           </div>
 
@@ -158,17 +254,24 @@ export const Messages = ({ currentUser }: MessagesProps) => {
                     >
                       <ChevronLeft className="w-5 h-5" />
                     </button>
-                    <img
-                      src={otherUser.avatar}
-                      alt={otherUser.firstName}
-                      className="w-10 h-10 rounded-full object-cover"
-                    />
+                    {otherUser.profilePicture ? (
+                      <img
+                        src={otherUser.profilePicture}
+                        alt={otherUser.firstName}
+                        className="w-10 h-10 rounded-full object-cover"
+                      />
+                    ) : (
+                      <div className="w-10 h-10 rounded-full bg-gray-300 flex items-center justify-center text-sm font-semibold text-gray-700">
+                        {otherUser.firstName.charAt(0)}
+                        {otherUser.lastName.charAt(0)}
+                      </div>
+                    )}
                     <div>
                       <p className="font-semibold text-gray-900">
                         {otherUser.firstName} {otherUser.lastName}
                       </p>
                       <p className="text-xs text-gray-500">
-                        {otherUser.isHost ? 'Host' : 'Guest'} • Typically responds within an hour
+                        Typically responds within an hour
                       </p>
                     </div>
                   </div>
@@ -190,12 +293,14 @@ export const Messages = ({ currentUser }: MessagesProps) => {
                   <div className="px-4 py-3 bg-gray-50 border-b border-gray-200">
                     <div
                       onClick={() =>
-                        navigate(`/listing/${selectedConversation.accommodation!.id}`)
+                        navigate(
+                          `/listing/${selectedConversation.accommodation!.id}`
+                        )
                       }
                       className="flex items-center gap-3 cursor-pointer hover:bg-gray-100 p-2 rounded-lg transition-colors"
                     >
                       <img
-                        src={selectedConversation.accommodation.images[0]}
+                        src={PLACEHOLDER_IMAGE}
                         alt={selectedConversation.accommodation.title}
                         className="w-12 h-12 rounded-lg object-cover"
                       />
@@ -203,38 +308,24 @@ export const Messages = ({ currentUser }: MessagesProps) => {
                         <p className="font-semibold text-gray-900 text-sm">
                           {selectedConversation.accommodation.title}
                         </p>
-                        <p className="text-xs text-gray-500">
-                          {selectedConversation.accommodation.location.city}
-                        </p>
-                      </div>
-                      <div className="text-right">
-                        <p className="font-semibold text-gray-900 text-sm">
-                          ${selectedConversation.accommodation.pricePerNight}
-                        </p>
-                        <p className="text-xs text-gray-500">/night</p>
                       </div>
                     </div>
                   </div>
                 )}
 
                 {/* Messages */}
-                <MessageThread
-                  messages={conversationMessages.length > 0 ? conversationMessages : [
-                    {
-                      id: 'welcome',
-                      senderId: otherUser.id,
-                      sender: otherUser,
-                      receiverId: currentUser.id,
-                      receiver: currentUser,
-                      content: `Hi! Thanks for your interest. How can I help you?`,
-                      createdAt: new Date(Date.now() - 86400000),
-                      isRead: true,
-                    }
-                  ]}
-                  currentUser={currentUser}
-                  otherUser={otherUser}
-                  onSendMessage={handleSendMessage}
-                />
+                {threadLoading ? (
+                  <LoadingState
+                    label="Loading conversation..."
+                    className="flex-1 flex items-center justify-center"
+                  />
+                ) : (
+                  <MessageThread
+                    messages={messages}
+                    otherUser={otherUser}
+                    onSendMessage={handleSendMessage}
+                  />
+                )}
               </>
             ) : (
               <div className="flex-1 flex items-center justify-center">

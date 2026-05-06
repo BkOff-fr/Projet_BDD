@@ -7,12 +7,31 @@ import {
   CreditCard,
   Calendar,
   Users,
-  MapPin,
-  ChevronRight,
   Star,
+  AlertCircle,
 } from 'lucide-react';
+import { bookingsAPI } from '@/services/api';
 import { cn } from '@/utils/cn';
-import { formatCurrency, formatDate, calculateNights } from '@/utils/helpers';
+import {
+  formatCurrency,
+  formatDate,
+  calculateNights,
+  getAccommodationTypeLabel,
+  PLACEHOLDER_IMAGE,
+} from '@/utils/helpers';
+import type { AccommodationDetail } from '@/types';
+
+interface BookingState {
+  accommodation: AccommodationDetail;
+  bookingData: {
+    checkIn: Date | null;
+    checkOut: Date | null;
+    guests: { adults: number; children: number; infants: number; pets: number };
+  };
+}
+
+/** Format a `Date` as `YYYY-MM-DD` (the shape the API expects). */
+const toYMD = (d: Date) => d.toISOString().split('T')[0];
 
 export const BookingConfirmation = () => {
   const location = useLocation();
@@ -20,10 +39,18 @@ export const BookingConfirmation = () => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [isComplete, setIsComplete] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<'card' | 'paypal'>('card');
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
-  const { accommodation, bookingData } = location.state || {};
+  const state = location.state as BookingState | null;
+  const accommodation = state?.accommodation;
+  const bookingData = state?.bookingData;
 
-  if (!accommodation || !bookingData) {
+  if (
+    !accommodation ||
+    !bookingData ||
+    !bookingData.checkIn ||
+    !bookingData.checkOut
+  ) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
@@ -41,16 +68,33 @@ export const BookingConfirmation = () => {
     );
   }
 
-  const nights = calculateNights(bookingData.checkIn!, bookingData.checkOut!);
+  const nights = calculateNights(bookingData.checkIn, bookingData.checkOut);
+  const cleaningFee = accommodation.cleaningFee ?? 0;
+  const serviceFee = accommodation.serviceFee ?? 0;
   const subtotal = accommodation.pricePerNight * nights;
-  const total = subtotal + accommodation.cleaningFee + accommodation.serviceFee;
+  const total = subtotal + cleaningFee + serviceFee;
+  const numGuests =
+    bookingData.guests.adults +
+    bookingData.guests.children +
+    bookingData.guests.infants;
 
   const handleConfirmBooking = async () => {
     setIsProcessing(true);
-    // Simulate API call
-    await new Promise((resolve) => setTimeout(resolve, 2000));
-    setIsProcessing(false);
-    setIsComplete(true);
+    setSubmitError(null);
+    try {
+      await bookingsAPI.create({
+        accommodationId: accommodation.id,
+        checkInDate: toYMD(bookingData.checkIn!),
+        checkOutDate: toYMD(bookingData.checkOut!),
+        numGuests: Math.max(1, numGuests),
+        // The form has no special-requests field today; leave undefined.
+      });
+      setIsProcessing(false);
+      setIsComplete(true);
+    } catch (err) {
+      setIsProcessing(false);
+      setSubmitError(err instanceof Error ? err.message : 'Booking failed.');
+    }
   };
 
   if (isComplete) {
@@ -64,8 +108,7 @@ export const BookingConfirmation = () => {
             Booking Confirmed!
           </h1>
           <p className="text-gray-600 mb-6">
-            Your reservation at {accommodation.title} has been confirmed. 
-            We&apos;ve sent a confirmation email with all the details.
+            Your reservation at {accommodation.title} has been confirmed.
           </p>
           <div className="space-y-3">
             <button
@@ -103,14 +146,18 @@ export const BookingConfirmation = () => {
               <div className="w-8 h-8 bg-primary text-white rounded-full flex items-center justify-center text-sm font-semibold">
                 2
               </div>
-              <span className="text-sm font-medium text-gray-900">Confirm & Pay</span>
+              <span className="text-sm font-medium text-gray-900">
+                Confirm & Pay
+              </span>
             </div>
             <div className="w-12 h-0.5 bg-gray-300" />
             <div className="flex items-center gap-2">
               <div className="w-8 h-8 bg-gray-300 text-gray-600 rounded-full flex items-center justify-center text-sm font-semibold">
                 3
               </div>
-              <span className="text-sm font-medium text-gray-500">Confirmation</span>
+              <span className="text-sm font-medium text-gray-500">
+                Confirmation
+              </span>
             </div>
           </div>
         </div>
@@ -129,25 +176,25 @@ export const BookingConfirmation = () => {
                   <div className="flex-1">
                     <p className="font-semibold text-gray-900">Dates</p>
                     <p className="text-gray-600">
-                      {formatDate(bookingData.checkIn!, 'EEE, MMM d')} -{' '}
-                      {formatDate(bookingData.checkOut!, 'EEE, MMM d, yyyy')}
+                      {formatDate(bookingData.checkIn, 'EEE, MMM d')} -{' '}
+                      {formatDate(bookingData.checkOut, 'EEE, MMM d, yyyy')}
                     </p>
                   </div>
-                  <button className="text-primary font-medium underline">Edit</button>
                 </div>
                 <div className="flex items-start gap-4">
                   <Users className="w-5 h-5 text-gray-500 mt-0.5" />
                   <div className="flex-1">
                     <p className="font-semibold text-gray-900">Guests</p>
                     <p className="text-gray-600">
-                      {bookingData.guests.adults + bookingData.guests.children} guests
+                      {bookingData.guests.adults +
+                        bookingData.guests.children}{' '}
+                      guests
                       {bookingData.guests.infants > 0 &&
                         `, ${bookingData.guests.infants} infant${
                           bookingData.guests.infants > 1 ? 's' : ''
                         }`}
                     </p>
                   </div>
-                  <button className="text-primary font-medium underline">Edit</button>
                 </div>
               </div>
             </div>
@@ -176,7 +223,9 @@ export const BookingConfirmation = () => {
                   />
                   <CreditCard className="w-6 h-6 text-gray-600" />
                   <div className="flex-1">
-                    <p className="font-semibold text-gray-900">Credit or debit card</p>
+                    <p className="font-semibold text-gray-900">
+                      Credit or debit card
+                    </p>
                   </div>
                 </label>
                 <label
@@ -203,46 +252,6 @@ export const BookingConfirmation = () => {
                   </div>
                 </label>
               </div>
-
-              {paymentMethod === 'card' && (
-                <div className="mt-4 space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Card number
-                    </label>
-                    <div className="relative">
-                      <CreditCard className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                      <input
-                        type="text"
-                        placeholder="0000 0000 0000 0000"
-                        className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
-                      />
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Expiration
-                      </label>
-                      <input
-                        type="text"
-                        placeholder="MM/YY"
-                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        CVV
-                      </label>
-                      <input
-                        type="text"
-                        placeholder="123"
-                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
-                      />
-                    </div>
-                  </div>
-                </div>
-              )}
             </div>
 
             {/* Cancellation Policy */}
@@ -251,32 +260,13 @@ export const BookingConfirmation = () => {
                 Cancellation policy
               </h2>
               <p className="text-gray-700">
-                <span className="font-semibold">Free cancellation</span> for 48 hours.
-                Cancel before {formatDate(bookingData.checkIn!, 'MMM d')} for a partial refund.
+                <span className="font-semibold">
+                  {accommodation.cancellationPolicy.name}
+                </span>
+                {accommodation.cancellationPolicy.description && (
+                  <> — {accommodation.cancellationPolicy.description}</>
+                )}
               </p>
-              <button className="text-primary font-medium underline mt-2">
-                Learn more
-              </button>
-            </div>
-
-            {/* Ground Rules */}
-            <div className="bg-white rounded-xl shadow-card p-6">
-              <h2 className="text-xl font-semibold text-gray-900 mb-4">
-                Ground rules
-              </h2>
-              <p className="text-gray-600 mb-4">
-                We ask every guest to remember a few simple things about what makes a great guest.
-              </p>
-              <ul className="space-y-3">
-                <li className="flex items-start gap-3">
-                  <Check className="w-5 h-5 text-gray-700 mt-0.5" />
-                  <span className="text-gray-700">Follow the house rules</span>
-                </li>
-                <li className="flex items-start gap-3">
-                  <Check className="w-5 h-5 text-gray-700 mt-0.5" />
-                  <span className="text-gray-700">Treat your Host&apos;s home like your own</span>
-                </li>
-              </ul>
             </div>
           </div>
 
@@ -287,7 +277,7 @@ export const BookingConfirmation = () => {
                 {/* Property Summary */}
                 <div className="flex gap-4 pb-6 border-b border-gray-200">
                   <img
-                    src={accommodation.images[0]}
+                    src={accommodation.coverImage ?? PLACEHOLDER_IMAGE}
                     alt={accommodation.title}
                     className="w-24 h-24 rounded-lg object-cover"
                   />
@@ -301,10 +291,12 @@ export const BookingConfirmation = () => {
                     <div className="flex items-center gap-1 mt-1">
                       <Star className="w-4 h-4 fill-primary text-primary" />
                       <span className="text-sm">
-                        {accommodation.rating.toFixed(2)}
+                        {accommodation.rating.average !== null
+                          ? accommodation.rating.average.toFixed(2)
+                          : 'New'}
                       </span>
                       <span className="text-sm text-gray-500">
-                        ({accommodation.reviewCount} reviews)
+                        ({accommodation.rating.count} reviews)
                       </span>
                     </div>
                   </div>
@@ -318,22 +310,27 @@ export const BookingConfirmation = () => {
                   <div className="space-y-3">
                     <div className="flex justify-between">
                       <span className="text-gray-700 underline">
-                        {formatCurrency(accommodation.pricePerNight)} x {nights} nights
+                        {formatCurrency(accommodation.pricePerNight)} x {nights}{' '}
+                        nights
                       </span>
                       <span className="text-gray-700">
                         {formatCurrency(subtotal)}
                       </span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-gray-700 underline">Cleaning fee</span>
+                      <span className="text-gray-700 underline">
+                        Cleaning fee
+                      </span>
                       <span className="text-gray-700">
-                        {formatCurrency(accommodation.cleaningFee)}
+                        {formatCurrency(cleaningFee)}
                       </span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-gray-700 underline">Service fee</span>
+                      <span className="text-gray-700 underline">
+                        Service fee
+                      </span>
                       <span className="text-gray-700">
-                        {formatCurrency(accommodation.serviceFee)}
+                        {formatCurrency(serviceFee)}
                       </span>
                     </div>
                   </div>
@@ -357,6 +354,14 @@ export const BookingConfirmation = () => {
                     <span className="font-semibold">Guest Refund Policy</span>
                   </p>
                 </div>
+
+                {/* Inline error from the API (e.g. dates already taken) */}
+                {submitError && (
+                  <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg flex items-start gap-2 text-sm text-red-700">
+                    <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                    <span>{submitError}</span>
+                  </div>
+                )}
 
                 {/* Confirm Button */}
                 <button
@@ -403,14 +408,4 @@ export const BookingConfirmation = () => {
       </div>
     </div>
   );
-};
-
-// Helper function
-const getAccommodationTypeLabel = (type: string): string => {
-  const labels: Record<string, string> = {
-    entire_place: 'Entire place',
-    private_room: 'Private room',
-    shared_room: 'Shared room',
-  };
-  return labels[type] || type;
 };

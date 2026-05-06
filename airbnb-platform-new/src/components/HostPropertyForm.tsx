@@ -1,8 +1,12 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Upload, X, ChevronRight, ChevronLeft } from 'lucide-react';
 import { cn } from '@/utils/cn';
-import { amenities } from '@/data/mockData';
-import type { CreateAccommodationInput, AccommodationType } from '@/types';
+import { accommodationsAPI } from '@/services/api';
+import type {
+  Amenity,
+  CreateAccommodationInput,
+  AccommodationType,
+} from '@/types';
 
 /**
  * The form drafts a `CreateAccommodationInput` payload. Note: the BDD has
@@ -46,6 +50,23 @@ export const HostPropertyForm = ({
   onCancel,
 }: HostPropertyFormProps) => {
   const [currentStep, setCurrentStep] = useState(0);
+  const [amenities, setAmenities] = useState<Amenity[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    accommodationsAPI
+      .getAmenities()
+      .then((list) => {
+        if (!cancelled) setAmenities(list);
+      })
+      .catch(() => {
+        if (!cancelled) setAmenities([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const [formData, setFormData] = useState<HostPropertyFormDraft>(
     property || {
       title: '',

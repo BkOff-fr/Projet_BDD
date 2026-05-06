@@ -1,21 +1,18 @@
 import { useState, useCallback, useMemo } from 'react';
-import type { SearchFilters, Accommodation, AccommodationType } from '@/types';
-import { filterAccommodations } from '@/utils/helpers';
+import type { SearchFilters, AccommodationType } from '@/types';
 
-interface UseSearchProps {
-  accommodations: Accommodation[];
-}
-
-export const useSearch = ({ accommodations }: UseSearchProps) => {
+/**
+ * Filter-state hook for the listings page. Holds the in-flight `SearchFilters`
+ * object plus convenience setters. Filtering itself now happens server-side
+ * (the listing page sends these filters to `accommodationsAPI.getAll`), so
+ * this hook no longer derives a `filteredAccommodations` list — it manages
+ * UI state only.
+ *
+ * The previously-returned `filteredAccommodations` and `priceRange` were
+ * removed in P0-T5 when mockData was deleted.
+ */
+export const useSearch = () => {
   const [filters, setFilters] = useState<SearchFilters>({});
-  const [isSearching, setIsSearching] = useState(false);
-
-  const filteredAccommodations = useMemo(() => {
-    setIsSearching(true);
-    const results = filterAccommodations(accommodations, filters);
-    setIsSearching(false);
-    return results;
-  }, [accommodations, filters]);
 
   const updateFilters = useCallback((newFilters: Partial<SearchFilters>) => {
     setFilters((prev) => ({ ...prev, ...newFilters }));
@@ -29,9 +26,12 @@ export const useSearch = ({ accommodations }: UseSearchProps) => {
     setFilters((prev) => ({ ...prev, location }));
   }, []);
 
-  const setDates = useCallback((checkIn: Date | undefined, checkOut: Date | undefined) => {
-    setFilters((prev) => ({ ...prev, checkIn, checkOut }));
-  }, []);
+  const setDates = useCallback(
+    (checkIn: Date | undefined, checkOut: Date | undefined) => {
+      setFilters((prev) => ({ ...prev, checkIn, checkOut }));
+    },
+    []
+  );
 
   const setGuests = useCallback((guests: SearchFilters['guests']) => {
     setFilters((prev) => ({ ...prev, guests }));
@@ -79,8 +79,6 @@ export const useSearch = ({ accommodations }: UseSearchProps) => {
 
   return {
     filters,
-    filteredAccommodations,
-    isSearching,
     activeFiltersCount,
     updateFilters,
     clearFilters,
