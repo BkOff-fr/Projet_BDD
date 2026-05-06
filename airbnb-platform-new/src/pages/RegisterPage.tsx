@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { AlertCircle, Eye, EyeOff, Lock, Mail, Phone, User } from 'lucide-react';
 import { cn } from '@/utils/cn';
 import { useAuth } from '@/hooks';
+import { Spinner } from '@/components';
 import type { RegisterInput } from '@/types';
 
 interface FieldErrors {
@@ -95,11 +96,15 @@ export const RegisterPage = () => {
                   required
                   value={firstName}
                   onChange={(e) => setFirstName(e.target.value)}
+                  aria-invalid={!!fieldErrors.firstName}
+                  aria-describedby={fieldErrors.firstName ? 'firstName-error' : undefined}
                   className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
                 />
               </div>
               {fieldErrors.firstName && (
-                <p className="mt-1 text-xs text-red-600">{fieldErrors.firstName}</p>
+                <p id="firstName-error" role="alert" className="mt-1 text-xs text-red-600">
+                  {fieldErrors.firstName}
+                </p>
               )}
             </div>
             <div>
@@ -113,10 +118,14 @@ export const RegisterPage = () => {
                 required
                 value={lastName}
                 onChange={(e) => setLastName(e.target.value)}
+                aria-invalid={!!fieldErrors.lastName}
+                aria-describedby={fieldErrors.lastName ? 'lastName-error' : undefined}
                 className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
               />
               {fieldErrors.lastName && (
-                <p className="mt-1 text-xs text-red-600">{fieldErrors.lastName}</p>
+                <p id="lastName-error" role="alert" className="mt-1 text-xs text-red-600">
+                  {fieldErrors.lastName}
+                </p>
               )}
             </div>
           </div>
@@ -134,12 +143,16 @@ export const RegisterPage = () => {
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
+                aria-invalid={!!fieldErrors.email}
+                aria-describedby={fieldErrors.email ? 'email-error' : undefined}
                 className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
                 placeholder="you@example.com"
               />
             </div>
             {fieldErrors.email && (
-              <p className="mt-1 text-xs text-red-600">{fieldErrors.email}</p>
+              <p id="email-error" role="alert" className="mt-1 text-xs text-red-600">
+                {fieldErrors.email}
+              </p>
             )}
           </div>
 
@@ -156,6 +169,8 @@ export const RegisterPage = () => {
                 required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
+                aria-invalid={!!fieldErrors.password}
+                aria-describedby={fieldErrors.password ? 'password-error' : undefined}
                 className="w-full pl-10 pr-10 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
                 placeholder="At least 6 characters"
               />
@@ -169,7 +184,9 @@ export const RegisterPage = () => {
               </button>
             </div>
             {fieldErrors.password && (
-              <p className="mt-1 text-xs text-red-600">{fieldErrors.password}</p>
+              <p id="password-error" role="alert" className="mt-1 text-xs text-red-600">
+                {fieldErrors.password}
+              </p>
             )}
           </div>
 
@@ -218,22 +235,7 @@ export const RegisterPage = () => {
           >
             {isLoading ? (
               <span className="flex items-center justify-center gap-2">
-                <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
-                  <circle
-                    className="opacity-25"
-                    cx="12"
-                    cy="12"
-                    r="10"
-                    stroke="currentColor"
-                    strokeWidth="4"
-                    fill="none"
-                  />
-                  <path
-                    className="opacity-75"
-                    fill="currentColor"
-                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                  />
-                </svg>
+                <Spinner className="h-5 w-5" />
                 Creating account...
               </span>
             ) : (

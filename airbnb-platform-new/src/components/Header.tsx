@@ -122,11 +122,7 @@ export const Header = ({ user, onLogout, variant = 'default' }: HeaderProps) => 
                     <User className="w-4 h-4" />
                   </div>
                 )}
-                {user && (
-                  <span className="absolute -top-1 -right-1 w-5 h-5 bg-primary text-white text-xs rounded-full flex items-center justify-center">
-                    2
-                  </span>
-                )}
+                {/* TODO: re-add unread-count badge once messagesAPI.getUnreadCount() is wired. */}
               </button>
 
               {/* Dropdown Menu */}
