@@ -5,3 +5,5 @@ export { UserProfile } from './UserProfile';
 export { HostDashboard } from './HostDashboard';
 export { BookingConfirmation } from './BookingConfirmation';
 export { Messages } from './Messages';
+export { LoginPage } from './LoginPage';
+export { RegisterPage } from './RegisterPage';

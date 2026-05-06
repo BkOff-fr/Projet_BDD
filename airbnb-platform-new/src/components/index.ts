@@ -7,3 +7,4 @@ export { BookingForm } from './BookingForm';
 export { MessageThread } from './MessageThread';
 export { HostPropertyForm } from './HostPropertyForm';
 export { Footer } from './Footer';
+export { RequireAuth } from './RequireAuth';

@@ -1,5 +1,5 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import { Header, Footer } from '@/components';
+import { Header, Footer, RequireAuth } from '@/components';
 import {
   Home,
   AccommodationList,
@@ -8,81 +8,72 @@ import {
   HostDashboard,
   BookingConfirmation,
   Messages,
+  LoginPage,
+  RegisterPage,
 } from '@/pages';
 import { useAuth } from '@/hooks';
-import { users } from '@/data/mockData';
 
 function App() {
-  const { user, isAuthenticated, logout } = useAuth();
+  const { user, logout } = useAuth();
 
   return (
     <Router>
       <div className="min-h-screen flex flex-col">
         <Header user={user} onLogout={logout} />
-        
+
         <main className="flex-1">
           <Routes>
             <Route path="/" element={<Home />} />
             <Route path="/listings" element={<AccommodationList />} />
             <Route path="/listing/:id" element={<AccommodationDetail />} />
+            <Route path="/login" element={<LoginPage />} />
+            <Route path="/register" element={<RegisterPage />} />
             <Route
               path="/profile"
               element={
-                isAuthenticated ? (
+                <RequireAuth>
                   <UserProfile user={user!} />
-                ) : (
-                  <Navigate to="/" replace />
-                )
+                </RequireAuth>
               }
             />
             <Route
               path="/host/dashboard"
               element={
-                isAuthenticated && user?.isHost ? (
+                <RequireAuth requireHost>
                   <HostDashboard user={user!} />
-                ) : (
-                  <Navigate to="/" replace />
-                )
+                </RequireAuth>
               }
             />
             <Route
               path="/host"
               element={
-                isAuthenticated ? (
+                <RequireAuth requireHost>
                   <HostDashboard user={user!} />
-                ) : (
-                  <Navigate to="/" replace />
-                )
+                </RequireAuth>
               }
             />
             <Route
               path="/booking/confirm"
               element={
-                isAuthenticated ? (
+                <RequireAuth>
                   <BookingConfirmation />
-                ) : (
-                  <Navigate to="/" replace />
-                )
+                </RequireAuth>
               }
             />
             <Route
               path="/bookings"
               element={
-                isAuthenticated ? (
+                <RequireAuth>
                   <UserProfile user={user!} />
-                ) : (
-                  <Navigate to="/" replace />
-                )
+                </RequireAuth>
               }
             />
             <Route
               path="/messages"
               element={
-                isAuthenticated ? (
+                <RequireAuth>
                   <Messages currentUser={user!} />
-                ) : (
-                  <Navigate to="/" replace />
-                )
+                </RequireAuth>
               }
             />
             <Route path="*" element={<Navigate to="/" replace />} />

@@ -184,12 +184,20 @@ export const Header = ({ user, onLogout, variant = 'default' }: HeaderProps) => 
                     </>
                   ) : (
                     <>
-                      <button className="block w-full text-left px-4 py-2 text-gray-900 font-semibold hover:bg-gray-50">
+                      <Link
+                        to="/register"
+                        className="block w-full text-left px-4 py-2 text-gray-900 font-semibold hover:bg-gray-50"
+                        onClick={() => setIsUserMenuOpen(false)}
+                      >
                         Sign up
-                      </button>
-                      <button className="block w-full text-left px-4 py-2 text-gray-700 hover:bg-gray-50">
+                      </Link>
+                      <Link
+                        to="/login"
+                        className="block w-full text-left px-4 py-2 text-gray-700 hover:bg-gray-50"
+                        onClick={() => setIsUserMenuOpen(false)}
+                      >
                         Log in
-                      </button>
+                      </Link>
                     </>
                   )}
                 </div>
