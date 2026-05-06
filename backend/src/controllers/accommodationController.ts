@@ -49,6 +49,10 @@ export const getAccommodations = asyncHandler(async (req: Request, res: Response
            u.last_name as host_last_name,
            u.profile_picture as host_picture,
            cp.name as cancellation_policy_name,
+           cp.description as cancellation_policy_description,
+           cp.full_refund_days_before,
+           cp.partial_refund_days_before,
+           cp.partial_refund_percentage,
            (SELECT AVG(r.rating) FROM reviews r
             JOIN bookings b ON r.booking_id = b.id
             WHERE b.accommodation_id = a.id) as avg_rating,
@@ -161,6 +165,10 @@ export const getAccommodations = asyncHandler(async (req: Request, res: Response
       cancellationPolicy: {
         id: acc.cancellation_policy_id,
         name: acc.cancellation_policy_name,
+        description: acc.cancellation_policy_description,
+        fullRefundDaysBefore: acc.full_refund_days_before,
+        partialRefundDaysBefore: acc.partial_refund_days_before,
+        partialRefundPercentage: parseFloat(acc.partial_refund_percentage),
       },
       rating: {
         average: acc.avg_rating ? parseFloat(acc.avg_rating) : null,

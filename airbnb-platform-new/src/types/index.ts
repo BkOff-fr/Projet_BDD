@@ -159,7 +159,7 @@ export interface Accommodation {
   isValidated: boolean;
   hasAlarmSystem: boolean;
   hasSmokeDetector: boolean;
-  cancellationPolicy: CancellationPolicySummary;
+  cancellationPolicy: CancellationPolicyDetail;
   rating: {
     average: number | null;
     count: number;
@@ -173,10 +173,11 @@ export interface Accommodation {
 
 /**
  * Shape returned by `GET /accommodations/:id` (detail endpoint).
- * Adds `reviews` and a richer `cancellationPolicy`.
+ * Adds `reviews` on top of the same shape returned by the list endpoint.
+ * (The list endpoint also returns the full `CancellationPolicyDetail` —
+ * see `accommodationController.ts#getAccommodations`.)
  */
-export interface AccommodationDetail extends Omit<Accommodation, 'cancellationPolicy'> {
-  cancellationPolicy: CancellationPolicyDetail;
+export interface AccommodationDetail extends Accommodation {
   reviews: Review[];
 }
 
