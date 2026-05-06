@@ -10,7 +10,12 @@ import {
   XCircle,
 } from 'lucide-react';
 import { differenceInCalendarDays, parseISO } from 'date-fns';
-import { CancelBookingModal, ErrorState, LoadingState } from '@/components';
+import {
+  CancelBookingModal,
+  ErrorState,
+  LeaveReviewModal,
+  LoadingState,
+} from '@/components';
 import { bookingsAPI } from '@/services/api';
 import { cn } from '@/utils/cn';
 import {
@@ -81,6 +86,7 @@ export const BookingDetailPage = () => {
   const [notFound, setNotFound] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
   const [showCancelModal, setShowCancelModal] = useState(false);
+  const [showReviewModal, setShowReviewModal] = useState(false);
 
   useEffect(() => {
     // If we already have the booking from navigation state and the URL id
@@ -183,6 +189,13 @@ export const BookingDetailPage = () => {
     // and the rest of the booking row hasn't changed — re-fetching the entire
     // list just to learn one field flipped would be wasteful.
     setBooking((prev) => (prev ? { ...prev, status: 'cancelled' } : prev));
+  };
+
+  const handleReviewed = () => {
+    // Same optimistic-update rationale as cancellation: the server confirmed,
+    // we just flip `hasReview` so the "Leave a review" button gives way to
+    // the "already reviewed" copy.
+    setBooking((prev) => (prev ? { ...prev, hasReview: true } : prev));
   };
 
   return (
@@ -340,12 +353,7 @@ export const BookingDetailPage = () => {
               {canReview && (
                 <button
                   type="button"
-                  onClick={() => {
-                    // TODO(P1-T3): open the review form modal seeded with this
-                    // booking id; on submit call bookingsAPI.createReview(...).
-                    // eslint-disable-next-line no-console
-                    console.log('TODO(P1-T3): review ' + booking.id);
-                  }}
+                  onClick={() => setShowReviewModal(true)}
                   className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-primary border border-primary/30 rounded-lg hover:bg-primary/5 transition-colors"
                 >
                   <Star className="w-4 h-4" />
@@ -367,6 +375,12 @@ export const BookingDetailPage = () => {
         booking={showCancelModal ? booking : null}
         onClose={() => setShowCancelModal(false)}
         onCancelled={handleCancelled}
+      />
+
+      <LeaveReviewModal
+        booking={showReviewModal ? booking : null}
+        onClose={() => setShowReviewModal(false)}
+        onReviewed={handleReviewed}
       />
     </div>
   );

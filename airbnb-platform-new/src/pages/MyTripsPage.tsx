@@ -9,7 +9,12 @@ import {
   Star,
   ChevronRight,
 } from 'lucide-react';
-import { CancelBookingModal, LoadingState, ErrorState } from '@/components';
+import {
+  CancelBookingModal,
+  LeaveReviewModal,
+  LoadingState,
+  ErrorState,
+} from '@/components';
 import { bookingsAPI } from '@/services/api';
 import { cn } from '@/utils/cn';
 import {
@@ -85,9 +90,15 @@ interface BookingCardProps {
   booking: Booking;
   tab: TripTab;
   onCancelClick: (booking: Booking) => void;
+  onReviewClick: (booking: Booking) => void;
 }
 
-const BookingCard = ({ booking, tab, onCancelClick }: BookingCardProps) => {
+const BookingCard = ({
+  booking,
+  tab,
+  onCancelClick,
+  onReviewClick,
+}: BookingCardProps) => {
   const navigate = useNavigate();
   // Pass the booking through navigation state so BookingDetailPage can render
   // immediately without re-fetching the list (state-first / API-fallback).
@@ -167,12 +178,7 @@ const BookingCard = ({ booking, tab, onCancelClick }: BookingCardProps) => {
           {canReview && (
             <button
               type="button"
-              onClick={() => {
-                // TODO(P1-T3): open the review form modal seeded with this
-                // booking id; on submit call bookingsAPI.createReview(...).
-                // eslint-disable-next-line no-console
-                console.log('TODO: review ' + booking.id);
-              }}
+              onClick={() => onReviewClick(booking)}
               className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-primary border border-primary/30 rounded-lg hover:bg-primary/5 transition-colors"
             >
               <Star className="w-4 h-4" />
@@ -258,6 +264,9 @@ export const MyTripsPage = () => {
   // Lifted modal state so the cancel confirmation can refresh the list on
   // success (re-trigger the fetch via reloadKey).
   const [bookingToCancel, setBookingToCancel] = useState<Booking | null>(null);
+  // Same lifting pattern for the review modal — refreshing the list flips
+  // `hasReview` and hides the "Leave a review" button automatically.
+  const [bookingToReview, setBookingToReview] = useState<Booking | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -351,6 +360,7 @@ export const MyTripsPage = () => {
                     booking={booking}
                     tab={activeTab}
                     onCancelClick={setBookingToCancel}
+                    onReviewClick={setBookingToReview}
                   />
                 ))}
               </div>
@@ -363,6 +373,12 @@ export const MyTripsPage = () => {
         booking={bookingToCancel}
         onClose={() => setBookingToCancel(null)}
         onCancelled={() => setReloadKey((k) => k + 1)}
+      />
+
+      <LeaveReviewModal
+        booking={bookingToReview}
+        onClose={() => setBookingToReview(null)}
+        onReviewed={() => setReloadKey((k) => k + 1)}
       />
     </div>
   );
