@@ -15,3 +15,4 @@ export { RequireAuth } from './RequireAuth';
 export { Spinner } from './Spinner';
 export { LoadingState } from './LoadingState';
 export { ErrorState } from './ErrorState';
+export { UserReviewsTab } from './UserReviewsTab';

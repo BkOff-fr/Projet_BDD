@@ -9,7 +9,7 @@ import {
   MessageSquare,
   Settings,
 } from 'lucide-react';
-import { LoadingState, ErrorState } from '@/components';
+import { LoadingState, ErrorState, UserReviewsTab } from '@/components';
 import { usersAPI, bookingsAPI, hostAPI } from '@/services/api';
 import { cn } from '@/utils/cn';
 import {
@@ -322,9 +322,7 @@ export const UserProfile = ({ user }: UserProfileProps) => {
                 <h2 className="text-xl font-semibold text-gray-900 mb-4">
                   Reviews
                 </h2>
-                <p className="text-gray-600">
-                  Reviews from hosts and guests will appear here.
-                </p>
+                <UserReviewsTab hasPastTrips={bookings.length > 0} />
               </div>
             )}
 
