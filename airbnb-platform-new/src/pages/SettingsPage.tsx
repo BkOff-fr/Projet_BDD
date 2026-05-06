@@ -153,8 +153,9 @@ export const SettingsPage = () => {
 
   // Danger zone handlers (P2-T2)
   const handleAccountDeleted = () => {
-    // Close the modal first to release inert/focus management before we
-    // unmount via navigation.
+    // Close the modal, log out, and return to home. React 18 batches the state
+    // updates from the modal close + logout, so the user transitions cleanly to
+    // a logged-out state at /.
     setShowDeleteModal(false);
     logout();
     navigate('/');

@@ -230,7 +230,7 @@ export const DeleteAccountModal = ({
           </div>
 
           {error && (
-            <div className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg p-3">
+            <div role="alert" className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg p-3">
               {error}
             </div>
           )}

@@ -115,7 +115,7 @@ export const BecomeHostFlow = ({
         role="dialog"
         aria-modal="true"
         aria-labelledby="become-host-title"
-        aria-describedby="become-host-description"
+        aria-describedby="become-host-desc"
       >
         <div className="flex items-start justify-between gap-3 px-6 pt-6 pb-2">
           <div className="flex items-start gap-3">
@@ -145,10 +145,11 @@ export const BecomeHostFlow = ({
           </button>
         </div>
 
-        <div
-          id="become-host-description"
-          className="px-6 py-4 space-y-4"
-        >
+        <div className="px-6 py-4 space-y-4">
+          <p id="become-host-desc" className="text-sm text-gray-600">
+            By continuing, your account will be upgraded to host status,
+            allowing you to list properties and accept bookings.
+          </p>
           <p className="text-sm text-gray-700">
             By becoming a host, you agree to take on the following
             responsibilities:
@@ -215,7 +216,7 @@ export const BecomeHostFlow = ({
           </label>
 
           {error && (
-            <div className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg p-3">
+            <div role="alert" className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg p-3">
               {error}
             </div>
           )}
