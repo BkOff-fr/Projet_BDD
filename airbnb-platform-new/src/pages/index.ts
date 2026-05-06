@@ -11,3 +11,4 @@ export { MyTripsPage } from './MyTripsPage';
 export { BookingDetailPage } from './BookingDetailPage';
 export { SettingsPage } from './SettingsPage';
 export { HostCalendarPage } from './HostCalendarPage';
+export { HostPricingPage } from './HostPricingPage';

@@ -14,6 +14,7 @@ import {
   BookingDetailPage,
   SettingsPage,
   HostCalendarPage,
+  HostPricingPage,
 } from '@/pages';
 import { useAuth } from '@/hooks';
 
@@ -61,6 +62,14 @@ function App() {
               element={
                 <RequireAuth requireHost>
                   <HostCalendarPage />
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="/host/properties/:propertyId/pricing"
+              element={
+                <RequireAuth requireHost>
+                  <HostPricingPage />
                 </RequireAuth>
               }
             />

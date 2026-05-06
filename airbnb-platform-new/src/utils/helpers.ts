@@ -29,6 +29,30 @@ export const formatDate = (date: Date | string, formatStr = 'MMM d, yyyy'): stri
   return format(d, formatStr);
 };
 
+/**
+ * Parse a YYYY-MM-DD (or full ISO with `T`) string into a LOCAL Date at noon.
+ *
+ * Why noon: parseISO of a bare YYYY-MM-DD treats it as UTC midnight; in
+ * negative-offset timezones that's the previous day locally. By constructing
+ * the Date from local Y/M/D components at 12:00, we sidestep both that issue
+ * AND any DST 1am→3am edge cases.
+ *
+ * Used by host calendar / pricing pages so backend "calendar dates" render
+ * exactly as the host typed them, regardless of the browser's timezone.
+ */
+export const parseLocalDate = (s: string): Date => {
+  const [y, m, d] = s.split('T')[0].split('-').map(Number);
+  return new Date(y, m - 1, d, 12, 0, 0, 0);
+};
+
+/**
+ * Format a backend YYYY-MM-DD (or ISO with `T`) string using LOCAL Y/M/D.
+ * Convenience wrapper around `parseLocalDate` + `format`. Avoids the UTC-shift
+ * bug present in `formatDate` for bare date strings.
+ */
+export const formatLocalDate = (raw: string, fmt = 'MMM d, yyyy'): string =>
+  format(parseLocalDate(raw), fmt);
+
 // Format short date
 export const formatShortDate = (date: Date | string): string => {
   const d = typeof date === 'string' ? parseISO(date) : date;

@@ -14,10 +14,10 @@ import {
   ChevronRight,
   X,
 } from 'lucide-react';
-import { format } from 'date-fns';
 import { hostAPI } from '@/services/api';
 import { LoadingState, ErrorState } from '@/components';
 import { cn } from '@/utils/cn';
+import { parseLocalDate, formatLocalDate } from '@/utils/helpers';
 import type {
   Availability,
   AvailabilityCalendar,
@@ -45,22 +45,8 @@ const dateKey = (d: Date): string => {
   return `${y}-${m}-${day}`;
 };
 
-/** Parse a YYYY-MM-DD string into a local Date at noon. */
-const parseDateKey = (s: string): Date => {
-  // parseISO would interpret "YYYY-MM-DD" as UTC midnight; we want local noon
-  // to dodge DST boundaries.
-  const [y, m, d] = s.split('T')[0].split('-').map(Number);
-  return new Date(y, m - 1, d, 12, 0, 0, 0);
-};
-
-/**
- * Format a backend date string (YYYY-MM-DD or ISO with a `T`) using LOCAL
- * year/month/day. Avoids the UTC-shift bug in `formatDate` from helpers.ts —
- * `parseISO('2025-12-01')` is UTC midnight, which is Nov 30 in negative-offset
- * timezones. We split on `T`, parse to a local-noon Date, and format that.
- */
-const formatLocalDate = (raw: string, fmt = 'MMM d, yyyy'): string =>
-  format(parseDateKey(raw.split('T')[0]), fmt);
+/** Local alias kept for readability — see `parseLocalDate` in utils/helpers. */
+const parseDateKey = parseLocalDate;
 
 /** Returns YYYY-MM-DD strings for every day in [startKey, endKey]. */
 const enumerateDateRange = (startKey: string, endKey: string): string[] => {

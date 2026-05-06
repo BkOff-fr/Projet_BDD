@@ -504,6 +504,18 @@ export const HostDashboard = ({ user }: HostDashboardProps) => {
                               <Calendar className="w-5 h-5" />
                             </button>
                             <button
+                              onClick={() =>
+                                navigate(
+                                  `/host/properties/${listing.id}/pricing`
+                                )
+                              }
+                              className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg"
+                              title="Manage pricing rules"
+                              aria-label={`Manage pricing rules for ${listing.title}`}
+                            >
+                              <DollarSign className="w-5 h-5" />
+                            </button>
+                            <button
                               disabled
                               title="Editing coming soon"
                               className="p-2 text-gray-400 rounded-lg cursor-not-allowed"
