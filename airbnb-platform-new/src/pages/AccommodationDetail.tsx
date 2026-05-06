@@ -8,7 +8,9 @@ import {
   Check,
   ChevronLeft,
   Shield,
+  ShieldCheck,
   Flag,
+  X,
 } from 'lucide-react';
 import {
   BookingForm,
@@ -380,6 +382,183 @@ export const AccommodationDetail = () => {
                   Show {showAllAmenities ? 'less' : `all ${accommodation.amenities.length} amenities`}
                 </button>
               )}
+            </div>
+
+            {/* Safety & security */}
+            <div className="py-6 border-b">
+              <h2 className="text-xl font-semibold text-gray-900 mb-4">
+                Safety &amp; security
+              </h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="flex items-center gap-3">
+                  {accommodation.hasSmokeDetector ? (
+                    <>
+                      <Check className="w-5 h-5 text-green-600 flex-shrink-0" />
+                      <span className="text-gray-700">Smoke detector</span>
+                    </>
+                  ) : (
+                    <>
+                      <X className="w-5 h-5 text-gray-400 flex-shrink-0" />
+                      <span className="text-gray-500">No smoke detector</span>
+                    </>
+                  )}
+                </div>
+                <div className="flex items-center gap-3">
+                  {accommodation.hasAlarmSystem ? (
+                    <>
+                      <Check className="w-5 h-5 text-green-600 flex-shrink-0" />
+                      <span className="text-gray-700">Alarm system</span>
+                    </>
+                  ) : (
+                    <>
+                      <X className="w-5 h-5 text-gray-400 flex-shrink-0" />
+                      <span className="text-gray-500">No alarm system</span>
+                    </>
+                  )}
+                </div>
+                {accommodation.isValidated && (
+                  <div className="flex items-start gap-3 md:col-span-2">
+                    <ShieldCheck className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" />
+                    <div>
+                      <span className="text-gray-900 font-medium">
+                        Verified by StayScape
+                      </span>
+                      <p className="text-gray-600 text-sm">
+                        This listing has been reviewed and approved by our team
+                        for safety and accuracy.
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* House rules */}
+            {accommodation.houseRules && accommodation.houseRules.trim() !== '' && (
+              <div className="py-6 border-b">
+                <h2 className="text-xl font-semibold text-gray-900 mb-4">
+                  House rules
+                </h2>
+                <p className="text-gray-700 leading-relaxed whitespace-pre-line">
+                  {accommodation.houseRules}
+                </p>
+              </div>
+            )}
+
+            {/* Cancellation policy */}
+            <div className="py-6 border-b">
+              <h2 className="text-xl font-semibold text-gray-900 mb-4">
+                Cancellation policy
+              </h2>
+              {(() => {
+                const policy = accommodation.cancellationPolicy;
+                const fullDays = policy.fullRefundDaysBefore;
+                const partialDays = policy.partialRefundDaysBefore;
+                const partialPct = policy.partialRefundPercentage;
+
+                const isNoRefund =
+                  fullDays === 0 && partialDays === 0 && partialPct === 0;
+                const isAllOrNothing =
+                  !isNoRefund &&
+                  (fullDays === partialDays || partialPct === 100);
+
+                return (
+                  <div className="border border-gray-200 rounded-xl p-6">
+                    <div className="mb-4">
+                      <p className="text-sm font-bold tracking-wider text-gray-900 uppercase">
+                        {policy.name.replace(/_/g, ' ')}
+                      </p>
+                      {policy.description && (
+                        <p className="text-gray-600 text-sm mt-2">
+                          {policy.description}
+                        </p>
+                      )}
+                    </div>
+
+                    <div className="space-y-3">
+                      {isNoRefund ? (
+                        <div className="flex items-center gap-3 p-3 rounded-lg bg-red-50 border border-red-100">
+                          <X className="w-5 h-5 text-red-600 flex-shrink-0" />
+                          <div className="flex-1 flex items-center justify-between">
+                            <span className="text-gray-800 text-sm">
+                              No refund regardless of cancellation date
+                            </span>
+                            <span className="font-semibold text-red-700 text-sm">
+                              0% refund
+                            </span>
+                          </div>
+                        </div>
+                      ) : isAllOrNothing ? (
+                        <>
+                          <div className="flex items-center gap-3 p-3 rounded-lg bg-green-50 border border-green-100">
+                            <Check className="w-5 h-5 text-green-600 flex-shrink-0" />
+                            <div className="flex-1 flex items-center justify-between">
+                              <span className="text-gray-800 text-sm">
+                                Cancel ≥ {fullDays} days before check-in
+                              </span>
+                              <span className="font-semibold text-green-700 text-sm">
+                                100% refund
+                              </span>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-3 p-3 rounded-lg bg-red-50 border border-red-100">
+                            <X className="w-5 h-5 text-red-600 flex-shrink-0" />
+                            <div className="flex-1 flex items-center justify-between">
+                              <span className="text-gray-800 text-sm">
+                                Less than {fullDays} days before check-in
+                              </span>
+                              <span className="font-semibold text-red-700 text-sm">
+                                0% refund
+                              </span>
+                            </div>
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          <div className="flex items-center gap-3 p-3 rounded-lg bg-green-50 border border-green-100">
+                            <Check className="w-5 h-5 text-green-600 flex-shrink-0" />
+                            <div className="flex-1 flex items-center justify-between">
+                              <span className="text-gray-800 text-sm">
+                                Cancel ≥ {fullDays} days before check-in
+                              </span>
+                              <span className="font-semibold text-green-700 text-sm">
+                                100% refund
+                              </span>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-3 p-3 rounded-lg bg-yellow-50 border border-yellow-100">
+                            <Shield className="w-5 h-5 text-yellow-600 flex-shrink-0" />
+                            <div className="flex-1 flex items-center justify-between">
+                              <span className="text-gray-800 text-sm">
+                                Cancel ≥ {partialDays} days before check-in
+                              </span>
+                              <span className="font-semibold text-yellow-700 text-sm">
+                                {partialPct}% refund
+                              </span>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-3 p-3 rounded-lg bg-red-50 border border-red-100">
+                            <X className="w-5 h-5 text-red-600 flex-shrink-0" />
+                            <div className="flex-1 flex items-center justify-between">
+                              <span className="text-gray-800 text-sm">
+                                Less than {partialDays} days before check-in
+                              </span>
+                              <span className="font-semibold text-red-700 text-sm">
+                                0% refund
+                              </span>
+                            </div>
+                          </div>
+                        </>
+                      )}
+                    </div>
+
+                    <p className="text-xs text-gray-500 mt-4">
+                      Refund eligibility depends on cancellation date relative
+                      to check-in.
+                    </p>
+                  </div>
+                );
+              })()}
             </div>
 
             {/* Reviews */}
