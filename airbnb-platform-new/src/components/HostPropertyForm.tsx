@@ -109,7 +109,7 @@ export const HostPropertyForm = ({
       beds: 1,
       bathrooms: 1,
       minimumNights: 1,
-      cancellationPolicyId: 1,
+      cancellationPolicyId: undefined as number | undefined,
       hasAlarmSystem: false,
       hasSmokeDetector: false,
       amenityIds: [],
@@ -173,7 +173,7 @@ export const HostPropertyForm = ({
       setValidationError('Please select a property type.');
       return;
     }
-    if (!formData.cancellationPolicyId) {
+    if (!(Number(formData.cancellationPolicyId) > 0)) {
       setValidationError('Please select a cancellation policy.');
       return;
     }
@@ -206,6 +206,15 @@ export const HostPropertyForm = ({
       setValidationError('Minimum nights must be at least 1.');
       return;
     }
+    if (
+      formData.maximumNights != null &&
+      formData.maximumNights < minimumNights
+    ) {
+      setValidationError(
+        'Maximum nights must be greater than or equal to minimum nights.'
+      );
+      return;
+    }
 
     // Strip local-only fields and undefined optionals before sending. The
     // backend Zod schema rejects unknown keys via `.parse`, so being explicit
@@ -223,7 +232,7 @@ export const HostPropertyForm = ({
       bathrooms,
       pricePerNight,
       minimumNights,
-      cancellationPolicyId: formData.cancellationPolicyId,
+      cancellationPolicyId: Number(formData.cancellationPolicyId),
       instantBook: !!formData.instantBook,
       hasAlarmSystem: !!formData.hasAlarmSystem,
       hasSmokeDetector: !!formData.hasSmokeDetector,
@@ -504,6 +513,9 @@ export const HostPropertyForm = ({
                 Upload Photos
               </button>
             </div>
+            <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded p-2 mt-2">
+              Photo uploads are not yet saved. This feature is coming soon.
+            </p>
             {formData.images && formData.images.length > 0 && (
               <div className="grid grid-cols-3 gap-4">
                 {formData.images.map((image, index) => (
@@ -542,7 +554,7 @@ export const HostPropertyForm = ({
                 type="number"
                 value={formData.pricePerNight}
                 onChange={(e) =>
-                  updateField('pricePerNight', parseInt(e.target.value))
+                  updateField('pricePerNight', parseFloat(e.target.value) || 0)
                 }
                 min={1}
                 className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
@@ -557,7 +569,7 @@ export const HostPropertyForm = ({
                   type="number"
                   value={formData.cleaningFee}
                   onChange={(e) =>
-                    updateField('cleaningFee', parseInt(e.target.value))
+                    updateField('cleaningFee', parseFloat(e.target.value) || 0)
                   }
                   min={0}
                   className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
@@ -571,7 +583,7 @@ export const HostPropertyForm = ({
                   type="number"
                   value={formData.serviceFee}
                   onChange={(e) =>
-                    updateField('serviceFee', parseInt(e.target.value))
+                    updateField('serviceFee', parseFloat(e.target.value) || 0)
                   }
                   min={0}
                   className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"

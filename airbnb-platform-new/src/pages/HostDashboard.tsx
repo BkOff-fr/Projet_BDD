@@ -29,7 +29,6 @@ import type {
   User,
   HostDashboardData,
   HostProperty,
-  Accommodation,
   CreateAccommodationInput,
 } from '@/types';
 
@@ -72,9 +71,6 @@ export const HostDashboard = ({ user }: HostDashboardProps) => {
     'overview' | 'listings' | 'bookings' | 'earnings'
   >('overview');
   const [showPropertyForm, setShowPropertyForm] = useState(false);
-  const [editingProperty, setEditingProperty] = useState<
-    Accommodation | undefined
-  >();
 
   const [dashboard, setDashboard] = useState<HostDashboardData | null>(null);
   const [properties, setProperties] = useState<HostProperty[]>([]);
@@ -149,24 +145,16 @@ export const HostDashboard = ({ user }: HostDashboardProps) => {
    * forwarded to the form via `submitError`; the modal stays open so the
    * host can correct fields without losing the in-progress draft.
    *
-   * Edit mode is intentionally still a no-op: the backend has no PATCH
-   * endpoint for accommodations yet, and the existing edit-mode flow only
-   * passed a cast-through-unknown `Accommodation` into the form. Don't
-   * regress what wasn't wired.
+   * Edit mode is intentionally not wired: the backend has no PATCH
+   * endpoint for accommodations yet. The Edit button in the listings row
+   * is rendered disabled with a "coming soon" tooltip.
    */
   const handleCreateListing = async (propertyData: CreateAccommodationInput) => {
-    if (editingProperty) {
-      // Edit mode is not yet wired to a backend endpoint — see comment above.
-      setShowPropertyForm(false);
-      setEditingProperty(undefined);
-      return;
-    }
     setSubmitting(true);
     setCreateError(null);
     try {
       await accommodationsAPI.create(propertyData);
       setShowPropertyForm(false);
-      setEditingProperty(undefined);
       setCreatedBanner(
         'Listing created! It will be visible to guests after platform validation.'
       );
@@ -183,13 +171,6 @@ export const HostDashboard = ({ user }: HostDashboardProps) => {
     } finally {
       setSubmitting(false);
     }
-  };
-
-  const handleEditListing = (property: HostProperty) => {
-    // The form expects a frontend-shaped Accommodation; cast for now until
-    // the form is reworked against HostProperty.
-    setEditingProperty(property as unknown as Accommodation);
-    setShowPropertyForm(true);
   };
 
   const totalEarnings = Number(dashboard.earnings.total);
@@ -226,7 +207,6 @@ export const HostDashboard = ({ user }: HostDashboardProps) => {
           </div>
           <button
             onClick={() => {
-              setEditingProperty(undefined);
               setCreateError(null);
               setShowPropertyForm(true);
             }}
@@ -512,9 +492,9 @@ export const HostDashboard = ({ user }: HostDashboardProps) => {
                               <Eye className="w-5 h-5" />
                             </button>
                             <button
-                              onClick={() => handleEditListing(listing)}
-                              className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg"
-                              title="Edit"
+                              disabled
+                              title="Editing coming soon"
+                              className="p-2 text-gray-400 rounded-lg cursor-not-allowed"
                             >
                               <Edit className="w-5 h-5" />
                             </button>
@@ -692,18 +672,12 @@ export const HostDashboard = ({ user }: HostDashboardProps) => {
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div className="w-full max-w-2xl max-h-[90vh] overflow-y-auto">
             <HostPropertyForm
-              // The form drafts a `CreateAccommodationInput` payload while
-              // `editingProperty` is a frontend `Accommodation` (with
-              // `cleaningFee: number | null`). Cast through unknown until
-              // the form's edit-mode is reworked against the API shape.
-              property={editingProperty as unknown as undefined}
               onSubmit={handleCreateListing}
               submitting={submitting}
               submitError={createError}
               onCancel={() => {
                 if (submitting) return; // Don't let the user close mid-submit.
                 setShowPropertyForm(false);
-                setEditingProperty(undefined);
                 setCreateError(null);
               }}
             />

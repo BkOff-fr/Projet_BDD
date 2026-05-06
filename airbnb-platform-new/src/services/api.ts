@@ -7,6 +7,7 @@ import type {
   Conversation,
   Message,
   Amenity,
+  CancellationPolicyDetail,
   RegisterInput,
   LoginInput,
   CreateAccommodationInput,
@@ -109,6 +110,9 @@ export const accommodationsAPI = {
     }),
 
   getAmenities: () => fetchAPI<Amenity[]>('/accommodations/amenities'),
+
+  getCancellationPolicies: () =>
+    fetchAPI<CancellationPolicyDetail[]>('/accommodations/cancellation-policies'),
 };
 
 // Bookings API
