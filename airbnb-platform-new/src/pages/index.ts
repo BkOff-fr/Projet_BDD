@@ -9,3 +9,4 @@ export { LoginPage } from './LoginPage';
 export { RegisterPage } from './RegisterPage';
 export { MyTripsPage } from './MyTripsPage';
 export { BookingDetailPage } from './BookingDetailPage';
+export { SettingsPage } from './SettingsPage';

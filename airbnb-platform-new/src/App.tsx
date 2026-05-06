@@ -12,6 +12,7 @@ import {
   RegisterPage,
   MyTripsPage,
   BookingDetailPage,
+  SettingsPage,
 } from '@/pages';
 import { useAuth } from '@/hooks';
 
@@ -83,6 +84,14 @@ function App() {
               element={
                 <RequireAuth>
                   <Messages currentUser={user!} />
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="/settings"
+              element={
+                <RequireAuth>
+                  <SettingsPage />
                 </RequireAuth>
               }
             />
