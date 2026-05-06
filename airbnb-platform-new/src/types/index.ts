@@ -386,8 +386,12 @@ export interface SendMessageInput {
 
 /**
  * Payload for `PATCH /users/me` (`userController.ts#updateProfile`).
- * Mirrors `updateProfileSchema` in the backend. All fields optional — server
- * 400s if none are provided.
+ *
+ * Intentionally narrower than `updateProfileSchema` in the backend. The Zod
+ * schema also accepts `bio`, `location`, and `languages`, but the controller
+ * does not persist them (the BDD has no columns for these fields), so they
+ * are excluded here to prevent silent no-op writes from the client. All
+ * fields are optional — the server 400s if none are provided.
  */
 export interface UpdateProfileInput {
   firstName?: string;
@@ -541,8 +545,11 @@ export interface AvailabilityCalendar {
 
 /**
  * Shape returned by `GET /host/dashboard` (`hostController.ts#getHostDashboard`).
- * Most nested objects come straight from MySQL aggregate rows so SUM/AVG
- * columns may arrive as strings (mysql2 default for DECIMAL/COUNT).
+ * The controller normalizes COUNT/SUM aggregates to plain numbers before
+ * responding (see `getHostDashboard`), so `bookings` and `earnings` are
+ * guaranteed numeric. Other nested objects (e.g. `monthlyStats`, `rating`)
+ * still come straight from MySQL aggregate rows where SUM/AVG columns may
+ * arrive as strings (mysql2 default for DECIMAL).
  */
 export interface HostDashboardData {
   properties: {
@@ -550,13 +557,13 @@ export interface HostDashboardData {
   };
   bookings: {
     total: number;
-    pending: number | string | null;
-    confirmed: number | string | null;
-    completed: number | string | null;
+    pending: number;
+    confirmed: number;
+    completed: number;
   };
   earnings: {
-    total: number | string;
-    completed_earnings: number | string;
+    total: number;
+    completed_earnings: number;
   };
   monthlyStats: Array<{
     month: string; // YYYY-MM

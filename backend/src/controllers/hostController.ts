@@ -92,12 +92,26 @@ export const getHostDashboard = asyncHandler(async (req: AuthRequest, res: Respo
     [hostId]
   );
 
+  // Normalize aggregate rows: mysql2 may return COUNT/SUM as strings (DECIMAL
+  // category). Coerce to plain numbers at the controller boundary so the wire
+  // shape and frontend types stay clean (no `number | string` ambiguity).
+  const rawBookings = (bookingsResult as any[])[0];
+  const rawEarnings = (earningsResult as any[])[0];
+
   res.json({
     properties: {
       total: (propertiesResult as any[])[0].total,
     },
-    bookings: bookingsResult[0],
-    earnings: earningsResult[0],
+    bookings: {
+      total: Number(rawBookings.total),
+      pending: Number(rawBookings.pending) || 0,
+      confirmed: Number(rawBookings.confirmed) || 0,
+      completed: Number(rawBookings.completed) || 0,
+    },
+    earnings: {
+      total: Number(rawEarnings.total),
+      completed_earnings: Number(rawEarnings.completed_earnings),
+    },
     monthlyStats: monthlyResult,
     recentBookings: (recentBookings as any[]).map((b) => ({
       ...b,
