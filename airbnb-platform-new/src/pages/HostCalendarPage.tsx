@@ -14,10 +14,10 @@ import {
   ChevronRight,
   X,
 } from 'lucide-react';
+import { format } from 'date-fns';
 import { hostAPI } from '@/services/api';
 import { LoadingState, ErrorState } from '@/components';
 import { cn } from '@/utils/cn';
-import { formatDate } from '@/utils/helpers';
 import type {
   Availability,
   AvailabilityCalendar,
@@ -52,6 +52,15 @@ const parseDateKey = (s: string): Date => {
   const [y, m, d] = s.split('T')[0].split('-').map(Number);
   return new Date(y, m - 1, d, 12, 0, 0, 0);
 };
+
+/**
+ * Format a backend date string (YYYY-MM-DD or ISO with a `T`) using LOCAL
+ * year/month/day. Avoids the UTC-shift bug in `formatDate` from helpers.ts —
+ * `parseISO('2025-12-01')` is UTC midnight, which is Nov 30 in negative-offset
+ * timezones. We split on `T`, parse to a local-noon Date, and format that.
+ */
+const formatLocalDate = (raw: string, fmt = 'MMM d, yyyy'): string =>
+  format(parseDateKey(raw.split('T')[0]), fmt);
 
 /** Returns YYYY-MM-DD strings for every day in [startKey, endKey]. */
 const enumerateDateRange = (startKey: string, endKey: string): string[] => {
@@ -544,8 +553,8 @@ const UnblockDatesModal = ({
           <div className="bg-gray-50 border border-gray-200 rounded-lg p-3">
             <p className="text-sm text-gray-600">Date range</p>
             <p className="font-medium text-gray-900">
-              {formatDate(block.start_date.split('T')[0], 'MMM d')} -{' '}
-              {formatDate(block.end_date.split('T')[0], 'MMM d, yyyy')}
+              {formatLocalDate(block.start_date, 'MMM d')} -{' '}
+              {formatLocalDate(block.end_date, 'MMM d, yyyy')}
             </p>
             {block.reason && (
               <>
@@ -623,8 +632,9 @@ export const HostCalendarPage = () => {
   const [month, setMonth] = useState(today.getMonth() + 1); // 1-12
 
   const [property, setProperty] = useState<HostProperty | null>(null);
+  const [ownershipLoading, setOwnershipLoading] = useState(true);
   const [calendar, setCalendar] = useState<AvailabilityCalendar | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [calendarLoading, setCalendarLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
 
@@ -635,44 +645,72 @@ export const HostCalendarPage = () => {
   const [unblockTarget, setUnblockTarget] = useState<Availability | null>(null);
   const [transientNotice, setTransientNotice] = useState<string | null>(null);
 
+  // Effect 1: ownership check. Runs only when the propertyId in the route
+  // changes — getProperties() is cheap but unrelated to month navigation, so
+  // there's no reason to re-fetch the host's property list every time the user
+  // clicks prev/next.
   useEffect(() => {
     if (!propertyIdValid) {
-      setLoading(false);
+      setOwnershipLoading(false);
       setError('Invalid property id.');
       return;
     }
     let cancelled = false;
-    setLoading(true);
+    setOwnershipLoading(true);
     setError(null);
-    Promise.all([
-      hostAPI.getProperties(),
-      hostAPI.getAvailabilityCalendar(propertyId, { year, month }),
-    ])
-      .then(([props, cal]) => {
+    hostAPI
+      .getProperties()
+      .then((props) => {
         if (cancelled) return;
         const match = props.find((p) => p.id === propertyId) ?? null;
         if (!match) {
           // Property doesn't belong to this host (or doesn't exist). The
           // backend would also 404 the calendar fetch in that case, but we
-          // surface a friendlier message.
+          // surface a friendlier message and skip the calendar request.
           setError('You do not have access to this property.');
           setProperty(null);
-          setCalendar(null);
         } else {
           setProperty(match);
-          setCalendar(cal);
         }
-        setLoading(false);
+        setOwnershipLoading(false);
       })
       .catch((err: Error) => {
         if (cancelled) return;
-        setError(err.message);
-        setLoading(false);
+        setError(err.message || 'Failed to verify property access');
+        setProperty(null);
+        setOwnershipLoading(false);
       });
     return () => {
       cancelled = true;
     };
-  }, [propertyId, propertyIdValid, year, month, reloadKey]);
+  }, [propertyId, propertyIdValid, reloadKey]);
+
+  // Effect 2: calendar fetch. Re-runs on month navigation and after a
+  // mutation (reloadKey). Gated on `property` being resolved so we don't fire
+  // the calendar request before ownership is confirmed (and don't fire it at
+  // all when the user has no access).
+  useEffect(() => {
+    if (!propertyIdValid || !property) return;
+    let cancelled = false;
+    setCalendarLoading(true);
+    hostAPI
+      .getAvailabilityCalendar(propertyId, { year, month })
+      .then((cal) => {
+        if (cancelled) return;
+        setCalendar(cal);
+        setCalendarLoading(false);
+      })
+      .catch((err: Error) => {
+        if (cancelled) return;
+        setError(err.message || 'Failed to load calendar');
+        setCalendarLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [propertyId, propertyIdValid, property, year, month, reloadKey]);
+
+  const loading = ownershipLoading || (property !== null && calendarLoading);
 
   // Auto-dismiss the booking-clicked notice after 3s.
   useEffect(() => {
@@ -816,9 +854,6 @@ export const HostCalendarPage = () => {
           <div className="grid grid-cols-7 gap-1 sm:gap-2">
             {cells.map((cell) => {
               const isToday = !cell.outside && cell.key === todayKey;
-              const interactive =
-                !cell.outside &&
-                (cell.kind === 'available' || cell.kind === 'host_blocked');
               const baseColor =
                 cell.kind === 'host_blocked'
                   ? 'bg-gray-200 hover:bg-gray-300'
@@ -854,9 +889,11 @@ export const HostCalendarPage = () => {
                   type="button"
                   onClick={() => handleCellClick(cell)}
                   // We render outside-month cells as a normal button for layout
-                  // but disable them so they don't take focus.
-                  disabled={cell.outside || (!interactive && cell.kind !== 'pending' && cell.kind !== 'taken')}
-                  aria-disabled={cell.outside || !interactive}
+                  // but disable them so they don't take focus. Pending/taken
+                  // booking cells stay clickable on purpose so they can fire the
+                  // transient "this date has a booking" notice.
+                  disabled={cell.outside}
+                  aria-disabled={cell.outside ? true : undefined}
                   title={tooltip}
                   className={cn(
                     'relative aspect-square sm:aspect-auto sm:h-20 rounded-lg border text-left p-1.5 sm:p-2 text-xs sm:text-sm transition-colors',
@@ -917,8 +954,8 @@ export const HostCalendarPage = () => {
                   >
                     <div>
                       <p className="font-medium text-gray-900 text-sm">
-                        {formatDate(row.start_date.split('T')[0], 'MMM d')} -{' '}
-                        {formatDate(row.end_date.split('T')[0], 'MMM d, yyyy')}
+                        {formatLocalDate(row.start_date, 'MMM d')} -{' '}
+                        {formatLocalDate(row.end_date, 'MMM d, yyyy')}
                       </p>
                       {row.reason && (
                         <p className="text-xs text-gray-600">{row.reason}</p>
