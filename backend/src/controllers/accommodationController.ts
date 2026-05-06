@@ -168,7 +168,9 @@ export const getAccommodations = asyncHandler(async (req: Request, res: Response
         description: acc.cancellation_policy_description,
         fullRefundDaysBefore: acc.full_refund_days_before,
         partialRefundDaysBefore: acc.partial_refund_days_before,
-        partialRefundPercentage: parseFloat(acc.partial_refund_percentage),
+        partialRefundPercentage: acc.partial_refund_percentage != null
+          ? parseFloat(acc.partial_refund_percentage)
+          : 0,
       },
       rating: {
         average: acc.avg_rating ? parseFloat(acc.avg_rating) : null,
@@ -289,7 +291,9 @@ export const getAccommodationById = asyncHandler(async (req: Request, res: Respo
       description: acc.cancellation_policy_description,
       fullRefundDaysBefore: acc.full_refund_days_before,
       partialRefundDaysBefore: acc.partial_refund_days_before,
-      partialRefundPercentage: parseFloat(acc.partial_refund_percentage),
+      partialRefundPercentage: acc.partial_refund_percentage != null
+        ? parseFloat(acc.partial_refund_percentage)
+        : 0,
     },
     rating: {
       average: acc.avg_rating ? parseFloat(acc.avg_rating) : null,

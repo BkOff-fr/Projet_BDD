@@ -89,11 +89,11 @@ export const useBooking = ({ accommodation }: UseBookingProps) => {
 
   const updateGuests = useCallback((
     type: keyof BookingFormData['guests'],
-    count: number
+    delta: number
   ) => {
     setFormData((prev) => ({
       ...prev,
-      guests: { ...prev.guests, [type]: Math.max(0, count) },
+      guests: { ...prev.guests, [type]: Math.max(0, prev.guests[type] + delta) },
     }));
   }, []);
 
