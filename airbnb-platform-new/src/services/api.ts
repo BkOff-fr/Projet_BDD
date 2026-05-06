@@ -14,9 +14,7 @@ import type {
   SendMessageInput,
 } from '@/types';
 
-const API_URL =
-  (import.meta as unknown as { env?: { VITE_API_URL?: string } }).env?.VITE_API_URL ||
-  'http://localhost:3001/api';
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
 
 // Generic fetch wrapper
 async function fetchAPI<T>(
@@ -106,7 +104,7 @@ export const bookingsAPI = {
   },
 
   create: (data: CreateBookingInput) =>
-    fetchAPI<{ message: string; id: number; totalPrice: string }>('/bookings', {
+    fetchAPI<{ message: string; id: number; totalPrice: number }>('/bookings', {
       method: 'POST',
       body: JSON.stringify(data),
     }),

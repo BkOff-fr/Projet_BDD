@@ -99,7 +99,10 @@ export const getHostDashboard = asyncHandler(async (req: AuthRequest, res: Respo
     bookings: bookingsResult[0],
     earnings: earningsResult[0],
     monthlyStats: monthlyResult,
-    recentBookings: recentBookings,
+    recentBookings: (recentBookings as any[]).map((b) => ({
+      ...b,
+      total_price: b.total_price !== null && b.total_price !== undefined ? Number(b.total_price) : b.total_price,
+    })),
     rating: ratingResult[0],
   });
 });
@@ -159,7 +162,12 @@ export const getPropertyBookings = asyncHandler(async (req: AuthRequest, res: Re
     [propertyId]
   );
 
-  res.json(rows);
+  const bookings = (rows as any[]).map((b) => ({
+    ...b,
+    total_price: b.total_price !== null && b.total_price !== undefined ? Number(b.total_price) : b.total_price,
+  }));
+
+  res.json(bookings);
 });
 
 // Update booking status (confirm, complete)

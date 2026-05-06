@@ -76,7 +76,7 @@ export const getMyBookings = asyncHandler(async (req: AuthRequest, res: Response
     checkInDate: b.check_in_date,
     checkOutDate: b.check_out_date,
     numGuests: b.num_guests,
-    totalPrice: b.total_price,
+    totalPrice: Number(b.total_price),
     status: b.status,
     specialRequests: b.special_requests,
     hasReview: !!b.review_id,
@@ -213,7 +213,7 @@ export const createBooking = asyncHandler(async (req: AuthRequest, res: Response
   res.status(201).json({
     message: 'Booking created successfully',
     id: bookingId,
-    totalPrice: totalPrice.toFixed(2),
+    totalPrice: Number(totalPrice.toFixed(2)),
   });
 });
 

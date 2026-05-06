@@ -236,7 +236,7 @@ export interface Booking {
   checkInDate: string;
   checkOutDate: string;
   numGuests: number;
-  totalPrice: number | string;
+  totalPrice: number;
   status: BookingStatus;
   specialRequests: string | null;
   hasReview: boolean;

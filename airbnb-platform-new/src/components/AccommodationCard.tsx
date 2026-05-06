@@ -21,7 +21,6 @@ export const AccommodationCard = ({
   className,
 }: AccommodationCardProps) => {
   const [isLiked, setIsLiked] = useState(false);
-  const [isHovered, setIsHovered] = useState(false);
 
   const isCompact = variant === 'compact';
   const isHorizontal = variant === 'horizontal';
@@ -37,8 +36,6 @@ export const AccommodationCard = ({
         isHorizontal && 'flex gap-4',
         className
       )}
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
     >
       {/* Image Container */}
       <div
@@ -119,13 +116,6 @@ export const AccommodationCard = ({
           </span>
           <span className="text-gray-500 text-sm">night</span>
         </div>
-
-        {/* Total (shown on hover or for horizontal) */}
-        {(isHovered || isHorizontal) && (
-          <p className="text-sm text-gray-500 underline">
-            {formatCurrency(accommodation.pricePerNight * 5)} total before taxes
-          </p>
-        )}
       </div>
     </Link>
   );
