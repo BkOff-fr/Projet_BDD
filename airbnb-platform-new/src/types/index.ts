@@ -632,7 +632,6 @@ export interface MyReviewRow {
   location_rating: number | null;
   value_rating: number | null;
   created_at: string;
-  updated_at: string;
   accommodation_title: string;
   accommodation_city: string;
   host_first_name: string;

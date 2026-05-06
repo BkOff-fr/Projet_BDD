@@ -322,7 +322,7 @@ export const UserProfile = ({ user }: UserProfileProps) => {
                 <h2 className="text-xl font-semibold text-gray-900 mb-4">
                   Reviews
                 </h2>
-                <UserReviewsTab hasPastTrips={bookings.length > 0} />
+                <UserReviewsTab hasPastTrips={bookings.some((b) => b.status === 'completed')} />
               </div>
             )}
 
