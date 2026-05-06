@@ -106,7 +106,7 @@ export const UserReviewsTab = ({ hasPastTrips }: UserReviewsTabProps) => {
         <p className="text-gray-500 text-sm mb-4">
           {hasPastTrips
             ? 'After your stay, share your experience with future guests.'
-            : 'Book a stay and you&apos;ll be able to leave a review when it&apos;s over.'}
+            : "Book a stay and you'll be able to leave a review when it's over."}
         </p>
         <Link
           to="/listings"
