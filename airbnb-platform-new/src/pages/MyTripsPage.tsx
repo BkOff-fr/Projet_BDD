@@ -156,6 +156,7 @@ const BookingCard = ({ booking, tab, onCancelClick }: BookingCardProps) => {
         <div className="flex flex-wrap items-center gap-2 mt-3">
           {tab === 'upcoming' && (
             <button
+              type="button"
               onClick={() => onCancelClick(booking)}
               className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-red-600 border border-red-200 rounded-lg hover:bg-red-50 transition-colors"
             >
@@ -165,6 +166,7 @@ const BookingCard = ({ booking, tab, onCancelClick }: BookingCardProps) => {
           )}
           {canReview && (
             <button
+              type="button"
               onClick={() => {
                 // TODO(P1-T3): open the review form modal seeded with this
                 // booking id; on submit call bookingsAPI.createReview(...).
@@ -178,6 +180,7 @@ const BookingCard = ({ booking, tab, onCancelClick }: BookingCardProps) => {
             </button>
           )}
           <button
+            type="button"
             onClick={goToDetail}
             className="inline-flex items-center gap-1 px-3 py-1.5 text-sm font-medium text-gray-700 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors ml-auto"
           >
@@ -316,6 +319,7 @@ export const MyTripsPage = () => {
               {tabs.map((tab) => (
                 <button
                   key={tab.id}
+                  type="button"
                   onClick={() => setActiveTab(tab.id)}
                   className={cn(
                     'flex items-center gap-2 px-6 py-4 text-sm font-medium transition-colors relative',

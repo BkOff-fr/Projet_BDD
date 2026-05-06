@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react';
+import { createPortal } from 'react-dom';
 import { AlertTriangle, X } from 'lucide-react';
 import { bookingsAPI } from '@/services/api';
 import { formatDate } from '@/utils/helpers';
@@ -37,17 +38,33 @@ export const CancelBookingModal = ({
   const [error, setError] = useState<string | null>(null);
   const confirmButtonRef = useRef<HTMLButtonElement | null>(null);
 
-  // Focus the confirm button when the modal opens, and reset transient state
-  // (loading/error) so a previous failed attempt doesn't bleed into a new one.
+  // Focus the confirm button when the modal opens, reset transient state, mark
+  // the rest of the app inert so keyboard focus is trapped inside the modal,
+  // and restore focus to the previously-focused element on close.
   useEffect(() => {
     if (!booking) return;
     setSubmitting(false);
     setError(null);
+
+    // Capture the element that had focus when the modal opened so we can
+    // restore it on close (typically the trigger button).
+    const previouslyFocused = document.activeElement as HTMLElement | null;
+
+    // Mark #root inert so Tab/Shift+Tab can't reach background controls.
+    // The modal itself is portaled to document.body, so it stays interactive.
+    const root = document.getElementById('root');
+    if (root) root.setAttribute('inert', '');
+
     // Defer focus to the next tick so the button is mounted.
     const t = window.setTimeout(() => {
       confirmButtonRef.current?.focus();
     }, 0);
-    return () => window.clearTimeout(t);
+
+    return () => {
+      window.clearTimeout(t);
+      if (root) root.removeAttribute('inert');
+      previouslyFocused?.focus();
+    };
   }, [booking]);
 
   // Escape closes the modal (unless we're mid-submit — avoid yanking the UI
@@ -87,15 +104,17 @@ export const CancelBookingModal = ({
     }
   };
 
-  return (
+  return createPortal(
     <div
       className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
       onClick={handleBackdropClick}
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="cancel-booking-title"
     >
-      <div className="bg-white rounded-xl max-w-md w-full shadow-xl">
+      <div
+        className="bg-white rounded-xl max-w-md w-full shadow-xl"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="cancel-booking-title"
+      >
         <div className="flex items-start justify-between gap-3 px-6 pt-6 pb-2">
           <div className="flex items-start gap-3">
             <div className="w-10 h-10 rounded-full bg-red-50 flex items-center justify-center flex-shrink-0">
@@ -167,6 +186,7 @@ export const CancelBookingModal = ({
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };
