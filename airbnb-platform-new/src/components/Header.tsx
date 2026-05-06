@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Menu, User, Globe, Search, Bell } from 'lucide-react';
+import { Menu, User, Globe } from 'lucide-react';
 import { cn } from '@/utils/cn';
 import { useClickOutside, useUnreadCount } from '@/hooks';
 import type { User as UserType } from '@/types';

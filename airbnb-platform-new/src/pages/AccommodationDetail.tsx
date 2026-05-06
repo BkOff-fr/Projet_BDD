@@ -334,7 +334,10 @@ export const AccommodationDetail = () => {
                 <Shield className="w-6 h-6 text-gray-700 mt-0.5" />
                 <div>
                   <h3 className="font-semibold text-gray-900">
-                    {accommodation.cancellationPolicy.name} cancellation policy
+                    {accommodation.cancellationPolicy.name
+                      .replace(/_/g, ' ')
+                      .replace(/\b\w/g, (c) => c.toUpperCase())}{' '}
+                    cancellation policy
                   </h3>
                   {accommodation.cancellationPolicy.description && (
                     <p className="text-gray-600 text-sm">
