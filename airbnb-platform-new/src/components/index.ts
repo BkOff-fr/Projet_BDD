@@ -6,6 +6,8 @@ export { ReviewCard } from './ReviewCard';
 export { BookingForm } from './BookingForm';
 export { CancelBookingModal } from './CancelBookingModal';
 export { LeaveReviewModal } from './LeaveReviewModal';
+export { DeleteAccountModal } from './DeleteAccountModal';
+export { BecomeHostFlow } from './BecomeHostFlow';
 export { MessageThread } from './MessageThread';
 export { HostPropertyForm } from './HostPropertyForm';
 export { Footer } from './Footer';

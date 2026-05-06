@@ -1,6 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { User as UserIcon, Lock, AlertTriangle } from 'lucide-react';
-import { LoadingState, ErrorState } from '@/components';
+import {
+  LoadingState,
+  ErrorState,
+  DeleteAccountModal,
+  BecomeHostFlow,
+} from '@/components';
 import { useAuth } from '@/hooks';
 import { usersAPI } from '@/services/api';
 import { cn } from '@/utils/cn';
@@ -62,9 +68,15 @@ const profileFromApi = (p: UserProfile): ProfileFormState => ({
 });
 
 export const SettingsPage = () => {
-  const { updateUser, user } = useAuth();
+  const { updateUser, user, logout } = useAuth();
+  const navigate = useNavigate();
 
   const [activeTab, setActiveTab] = useState<TabId>('profile');
+
+  // Danger zone modals (P2-T2)
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [showHostModal, setShowHostModal] = useState(false);
+  const [becameHostBanner, setBecameHostBanner] = useState<string | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -131,6 +143,30 @@ export const SettingsPage = () => {
     const handle = window.setTimeout(() => setProfileSuccess(null), 3000);
     return () => window.clearTimeout(handle);
   }, [profileSuccess]);
+
+  // Auto-dismiss the "you're now a host" banner after 3s.
+  useEffect(() => {
+    if (!becameHostBanner) return;
+    const handle = window.setTimeout(() => setBecameHostBanner(null), 3000);
+    return () => window.clearTimeout(handle);
+  }, [becameHostBanner]);
+
+  // Danger zone handlers (P2-T2)
+  const handleAccountDeleted = () => {
+    // Close the modal first to release inert/focus management before we
+    // unmount via navigation.
+    setShowDeleteModal(false);
+    logout();
+    navigate('/');
+  };
+
+  const handleBecameHost = () => {
+    updateUser({ isHost: true });
+    setShowHostModal(false);
+    setBecameHostBanner(
+      "You're now a host! Visit your Host Dashboard to add your first listing."
+    );
+  };
 
   const isProfileDirty = useMemo(() => {
     return (
@@ -661,8 +697,13 @@ export const SettingsPage = () => {
                   </div>
                 </div>
 
+                {becameHostBanner && (
+                  <div className="mb-4 p-3 bg-green-50 border border-green-200 text-green-800 rounded-lg text-sm">
+                    {becameHostBanner}
+                  </div>
+                )}
+
                 <div className="space-y-4">
-                  {/* Delete account stub — wired to real modal in P2-T2 */}
                   <div className="border border-red-200 rounded-lg p-5">
                     <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
                       <div className="flex-1">
@@ -674,16 +715,10 @@ export const SettingsPage = () => {
                           bookings. This cannot be undone and the data is not
                           recoverable.
                         </p>
-                        <p className="text-xs text-gray-500 mt-2 italic">
-                          Account deletion will be enabled in P2-T2.
-                        </p>
                       </div>
                       <button
                         type="button"
-                        onClick={() => {
-                          // TODO(P2-T2): open DeleteAccountModal
-                          console.log('TODO(P2-T2): open DeleteAccountModal');
-                        }}
+                        onClick={() => setShowDeleteModal(true)}
                         className="w-full sm:w-auto px-4 py-2 bg-red-600 text-white rounded-lg font-semibold hover:bg-red-700 transition-colors flex-shrink-0"
                       >
                         Delete my account
@@ -691,8 +726,7 @@ export const SettingsPage = () => {
                     </div>
                   </div>
 
-                  {/* Become a host stub — wired to real flow in P2-T2.
-                      Hidden when the user is already a host. */}
+                  {/* Become a host — hidden when the user is already a host. */}
                   {user && user.isHost === false && (
                     <div className="border border-gray-200 rounded-lg p-5">
                       <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
@@ -705,16 +739,10 @@ export const SettingsPage = () => {
                             the host dashboard and the ability to publish
                             listings.
                           </p>
-                          <p className="text-xs text-gray-500 mt-2 italic">
-                            Host onboarding will be enabled in P2-T2.
-                          </p>
                         </div>
                         <button
                           type="button"
-                          onClick={() => {
-                            // TODO(P2-T2): open BecomeHostFlow
-                            console.log('TODO(P2-T2): open BecomeHostFlow');
-                          }}
+                          onClick={() => setShowHostModal(true)}
                           className="w-full sm:w-auto px-4 py-2 bg-primary text-white rounded-lg font-semibold hover:bg-primary-dark transition-colors flex-shrink-0"
                         >
                           Become a host
@@ -728,6 +756,17 @@ export const SettingsPage = () => {
           </div>
         </div>
       </div>
+
+      <DeleteAccountModal
+        open={showDeleteModal}
+        onClose={() => setShowDeleteModal(false)}
+        onDeleted={handleAccountDeleted}
+      />
+      <BecomeHostFlow
+        open={showHostModal}
+        onClose={() => setShowHostModal(false)}
+        onCompleted={handleBecameHost}
+      />
     </div>
   );
 };
