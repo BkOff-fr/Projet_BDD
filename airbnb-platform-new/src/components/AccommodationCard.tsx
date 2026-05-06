@@ -1,8 +1,12 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Heart, Star, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Heart, Star } from 'lucide-react';
 import { cn } from '@/utils/cn';
-import { formatCurrency, getAccommodationTypeLabel } from '@/utils/helpers';
+import {
+  formatCurrency,
+  getAccommodationTypeLabel,
+  getAccommodationImage,
+} from '@/utils/helpers';
 import type { Accommodation } from '@/types';
 
 interface AccommodationCardProps {
@@ -16,28 +20,14 @@ export const AccommodationCard = ({
   variant = 'default',
   className,
 }: AccommodationCardProps) => {
-  const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [isLiked, setIsLiked] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
 
   const isCompact = variant === 'compact';
   const isHorizontal = variant === 'horizontal';
 
-  const nextImage = (e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setCurrentImageIndex((prev) =>
-      prev === accommodation.images.length - 1 ? 0 : prev + 1
-    );
-  };
-
-  const prevImage = (e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setCurrentImageIndex((prev) =>
-      prev === 0 ? accommodation.images.length - 1 : prev - 1
-    );
-  };
+  const image = getAccommodationImage(accommodation);
+  const ratingAverage = accommodation.rating.average;
 
   return (
     <Link
@@ -58,18 +48,13 @@ export const AccommodationCard = ({
         )}
       >
         <img
-          src={accommodation.images[currentImageIndex]}
+          src={image}
           alt={accommodation.title}
           className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
         />
 
         {/* Badges */}
         <div className="absolute top-3 left-3 flex gap-2">
-          {accommodation.isSuperhost && (
-            <span className="px-2 py-1 bg-white/90 backdrop-blur-sm rounded-md text-xs font-semibold text-gray-800">
-              Superhost
-            </span>
-          )}
           {accommodation.instantBook && (
             <span className="px-2 py-1 bg-primary/90 backdrop-blur-sm rounded-md text-xs font-semibold text-white">
               Instant Book
@@ -93,41 +78,6 @@ export const AccommodationCard = ({
             )}
           />
         </button>
-
-        {/* Image Navigation */}
-        {accommodation.images.length > 1 && isHovered && (
-          <>
-            <button
-              onClick={prevImage}
-              className="absolute left-2 top-1/2 -translate-y-1/2 w-8 h-8 bg-white/90 backdrop-blur-sm rounded-full flex items-center justify-center shadow-md hover:bg-white transition-colors"
-            >
-              <ChevronLeft className="w-4 h-4" />
-            </button>
-            <button
-              onClick={nextImage}
-              className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 bg-white/90 backdrop-blur-sm rounded-full flex items-center justify-center shadow-md hover:bg-white transition-colors"
-            >
-              <ChevronRight className="w-4 h-4" />
-            </button>
-          </>
-        )}
-
-        {/* Image Dots */}
-        {accommodation.images.length > 1 && (
-          <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-1">
-            {accommodation.images.map((_, index) => (
-              <div
-                key={index}
-                className={cn(
-                  'w-1.5 h-1.5 rounded-full transition-colors',
-                  index === currentImageIndex
-                    ? 'bg-white'
-                    : 'bg-white/50'
-                )}
-              />
-            ))}
-          </div>
-        )}
       </div>
 
       {/* Content */}
@@ -150,7 +100,7 @@ export const AccommodationCard = ({
           <div className="flex items-center gap-1">
             <Star className="w-4 h-4 fill-primary text-primary" />
             <span className="text-sm font-semibold">
-              {accommodation.rating.toFixed(2)}
+              {ratingAverage !== null ? ratingAverage.toFixed(2) : 'New'}
             </span>
           </div>
         </div>

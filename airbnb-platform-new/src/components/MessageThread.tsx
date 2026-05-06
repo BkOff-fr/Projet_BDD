@@ -2,19 +2,24 @@ import { useState, useRef, useEffect } from 'react';
 import { Send, Image, Paperclip } from 'lucide-react';
 import { cn } from '@/utils/cn';
 import { formatDate } from '@/utils/helpers';
-import type { Message, User } from '@/types';
+import type { Message } from '@/types';
+
+interface ThreadOtherUser {
+  id: number;
+  firstName: string;
+  lastName: string;
+  profilePicture?: string | null;
+}
 
 interface MessageThreadProps {
   messages: Message[];
-  currentUser: User;
-  otherUser: User;
+  otherUser: ThreadOtherUser;
   onSendMessage: (content: string) => void;
   className?: string;
 }
 
 export const MessageThread = ({
   messages,
-  currentUser,
   otherUser,
   onSendMessage,
   className,
@@ -48,21 +53,29 @@ export const MessageThread = ({
     return groups;
   }, {} as Record<string, Message[]>);
 
+  const otherInitials = `${otherUser.firstName.charAt(0)}${otherUser.lastName.charAt(0)}`.toUpperCase();
+
   return (
     <div className={cn('flex flex-col h-full bg-white', className)}>
       {/* Header */}
       <div className="flex items-center gap-3 p-4 border-b border-gray-200">
-        <img
-          src={otherUser.avatar}
-          alt={`${otherUser.firstName} ${otherUser.lastName}`}
-          className="w-10 h-10 rounded-full object-cover"
-        />
+        {otherUser.profilePicture ? (
+          <img
+            src={otherUser.profilePicture}
+            alt={`${otherUser.firstName} ${otherUser.lastName}`}
+            className="w-10 h-10 rounded-full object-cover"
+          />
+        ) : (
+          <div className="w-10 h-10 rounded-full bg-gray-300 flex items-center justify-center text-sm font-semibold text-gray-700">
+            {otherInitials}
+          </div>
+        )}
         <div>
           <p className="font-semibold text-gray-900">
             {otherUser.firstName} {otherUser.lastName}
           </p>
           <p className="text-sm text-gray-500">
-            {otherUser.isHost ? 'Host' : 'Guest'} • Typically responds within an hour
+            Typically responds within an hour
           </p>
         </div>
       </div>
@@ -81,7 +94,7 @@ export const MessageThread = ({
             {/* Messages for this date */}
             <div className="space-y-3">
               {dateMessages.map((message) => {
-                const isCurrentUser = message.senderId === currentUser.id;
+                const isCurrentUser = message.isFromMe;
                 return (
                   <div
                     key={message.id}

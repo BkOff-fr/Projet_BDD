@@ -1,5 +1,5 @@
 import { useState, useCallback, useMemo } from 'react';
-import type { SearchFilters, Accommodation } from '@/types';
+import type { SearchFilters, Accommodation, AccommodationType } from '@/types';
 import { filterAccommodations } from '@/utils/helpers';
 
 interface UseSearchProps {
@@ -41,12 +41,12 @@ export const useSearch = ({ accommodations }: UseSearchProps) => {
     setFilters((prev) => ({ ...prev, priceRange: { min, max } }));
   }, []);
 
-  const togglePropertyType = useCallback((propertyType: string) => {
+  const togglePropertyType = useCallback((propertyType: AccommodationType) => {
     setFilters((prev) => {
       const currentTypes = prev.propertyTypes || [];
-      const newTypes = currentTypes.includes(propertyType as never)
+      const newTypes = currentTypes.includes(propertyType)
         ? currentTypes.filter((t) => t !== propertyType)
-        : [...currentTypes, propertyType as never];
+        : [...currentTypes, propertyType];
       return { ...prev, propertyTypes: newTypes };
     });
   }, []);
@@ -65,10 +65,6 @@ export const useSearch = ({ accommodations }: UseSearchProps) => {
     setFilters((prev) => ({ ...prev, instantBook: !prev.instantBook }));
   }, []);
 
-  const toggleSuperhost = useCallback(() => {
-    setFilters((prev) => ({ ...prev, superhost: !prev.superhost }));
-  }, []);
-
   const activeFiltersCount = useMemo(() => {
     let count = 0;
     if (filters.location) count++;
@@ -78,7 +74,6 @@ export const useSearch = ({ accommodations }: UseSearchProps) => {
     if (filters.propertyTypes?.length) count++;
     if (filters.amenities?.length) count++;
     if (filters.instantBook) count++;
-    if (filters.superhost) count++;
     return count;
   }, [filters]);
 
@@ -96,6 +91,5 @@ export const useSearch = ({ accommodations }: UseSearchProps) => {
     togglePropertyType,
     toggleAmenity,
     toggleInstantBook,
-    toggleSuperhost,
   };
 };

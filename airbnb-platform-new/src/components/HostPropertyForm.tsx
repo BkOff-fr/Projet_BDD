@@ -1,12 +1,22 @@
 import { useState } from 'react';
-import { Upload, Plus, X, ChevronRight, ChevronLeft } from 'lucide-react';
+import { Upload, X, ChevronRight, ChevronLeft } from 'lucide-react';
 import { cn } from '@/utils/cn';
 import { amenities } from '@/data/mockData';
-import type { Accommodation, AccommodationType, PropertyType } from '@/types';
+import type { CreateAccommodationInput, AccommodationType } from '@/types';
+
+/**
+ * The form drafts a `CreateAccommodationInput` payload. Note: the BDD has
+ * no images table; the photo step is a UI placeholder and its values are
+ * not part of the input payload sent to the API.
+ */
+interface HostPropertyFormDraft extends Partial<CreateAccommodationInput> {
+  /** Local-only — the API does not currently accept photo URLs. */
+  images?: string[];
+}
 
 interface HostPropertyFormProps {
-  property?: Accommodation;
-  onSubmit: (propertyData: Partial<Accommodation>) => void;
+  property?: HostPropertyFormDraft;
+  onSubmit: (propertyData: HostPropertyFormDraft) => void;
   onCancel: () => void;
 }
 
@@ -19,20 +29,15 @@ const steps = [
   'Pricing',
 ];
 
-const propertyTypes: { value: PropertyType; label: string }[] = [
-  { value: 'studio', label: 'Studio' },
+const accommodationTypes: { value: AccommodationType; label: string }[] = [
   { value: 'apartment', label: 'Apartment' },
   { value: 'house', label: 'House' },
   { value: 'villa', label: 'Villa' },
-  { value: 'cabin', label: 'Cabin' },
   { value: 'condo', label: 'Condo' },
-  { value: 'loft', label: 'Loft' },
-];
-
-const accommodationTypes: { value: AccommodationType; label: string }[] = [
-  { value: 'entire_place', label: 'Entire place' },
+  { value: 'cabin', label: 'Cabin' },
+  { value: 'guesthouse', label: 'Guesthouse' },
+  { value: 'studio', label: 'Studio' },
   { value: 'private_room', label: 'Private room' },
-  { value: 'shared_room', label: 'Shared room' },
 ];
 
 export const HostPropertyForm = ({
@@ -41,19 +46,14 @@ export const HostPropertyForm = ({
   onCancel,
 }: HostPropertyFormProps) => {
   const [currentStep, setCurrentStep] = useState(0);
-  const [formData, setFormData] = useState<Partial<Accommodation>>(
+  const [formData, setFormData] = useState<HostPropertyFormDraft>(
     property || {
       title: '',
       description: '',
-      type: 'entire_place',
-      propertyType: 'apartment',
-      location: {
-        address: '',
-        city: '',
-        country: '',
-        latitude: 0,
-        longitude: 0,
-      },
+      type: 'apartment',
+      address: '',
+      city: '',
+      country: '',
       pricePerNight: 100,
       cleaningFee: 50,
       serviceFee: 25,
@@ -61,25 +61,27 @@ export const HostPropertyForm = ({
       bedrooms: 1,
       beds: 1,
       bathrooms: 1,
-      amenities: [],
+      minimumNights: 1,
+      cancellationPolicyId: 1,
+      amenityIds: [],
       images: [],
       instantBook: false,
     }
   );
 
-  const updateField = <K extends keyof Accommodation>(
+  const updateField = <K extends keyof HostPropertyFormDraft>(
     field: K,
-    value: Accommodation[K]
+    value: HostPropertyFormDraft[K]
   ) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
   };
 
-  const toggleAmenity = (amenityId: string) => {
-    const currentAmenities = formData.amenities || [];
+  const toggleAmenity = (amenityId: number) => {
+    const currentAmenities = formData.amenityIds || [];
     const newAmenities = currentAmenities.includes(amenityId)
       ? currentAmenities.filter((a) => a !== amenityId)
       : [...currentAmenities, amenityId];
-    updateField('amenities', newAmenities);
+    updateField('amenityIds', newAmenities);
   };
 
   const handleNext = () => {
@@ -127,43 +129,23 @@ export const HostPropertyForm = ({
                 className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent resize-none"
               />
             </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">
-                  Accommodation Type
-                </label>
-                <select
-                  value={formData.type}
-                  onChange={(e) =>
-                    updateField('type', e.target.value as AccommodationType)
-                  }
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
-                >
-                  {accommodationTypes.map((type) => (
-                    <option key={type.value} value={type.value}>
-                      {type.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">
-                  Property Type
-                </label>
-                <select
-                  value={formData.propertyType}
-                  onChange={(e) =>
-                    updateField('propertyType', e.target.value as PropertyType)
-                  }
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
-                >
-                  {propertyTypes.map((type) => (
-                    <option key={type.value} value={type.value}>
-                      {type.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-2">
+                Property Type
+              </label>
+              <select
+                value={formData.type}
+                onChange={(e) =>
+                  updateField('type', e.target.value as AccommodationType)
+                }
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+              >
+                {accommodationTypes.map((type) => (
+                  <option key={type.value} value={type.value}>
+                    {type.label}
+                  </option>
+                ))}
+              </select>
             </div>
           </div>
         );
@@ -177,13 +159,8 @@ export const HostPropertyForm = ({
               </label>
               <input
                 type="text"
-                value={formData.location?.address}
-                onChange={(e) =>
-                  updateField('location', {
-                    ...formData.location,
-                    address: e.target.value,
-                  } as Accommodation['location'])
-                }
+                value={formData.address ?? ''}
+                onChange={(e) => updateField('address', e.target.value)}
                 placeholder="e.g., 123 Main Street"
                 className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
               />
@@ -195,13 +172,8 @@ export const HostPropertyForm = ({
                 </label>
                 <input
                   type="text"
-                  value={formData.location?.city}
-                  onChange={(e) =>
-                    updateField('location', {
-                      ...formData.location,
-                      city: e.target.value,
-                    } as Accommodation['location'])
-                  }
+                  value={formData.city ?? ''}
+                  onChange={(e) => updateField('city', e.target.value)}
                   placeholder="City"
                   className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
                 />
@@ -212,13 +184,8 @@ export const HostPropertyForm = ({
                 </label>
                 <input
                   type="text"
-                  value={formData.location?.country}
-                  onChange={(e) =>
-                    updateField('location', {
-                      ...formData.location,
-                      country: e.target.value,
-                    } as Accommodation['location'])
-                  }
+                  value={formData.country ?? ''}
+                  onChange={(e) => updateField('country', e.target.value)}
                   placeholder="Country"
                   className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
                 />
@@ -299,25 +266,29 @@ export const HostPropertyForm = ({
               Select the amenities your property offers
             </p>
             <div className="grid grid-cols-2 gap-3 max-h-80 overflow-y-auto">
-              {amenities.map((amenity) => (
-                <label
-                  key={amenity.id}
-                  className={cn(
-                    'flex items-center gap-3 p-3 border rounded-lg cursor-pointer transition-colors',
-                    formData.amenities?.includes(amenity.id)
-                      ? 'border-primary bg-primary/5'
-                      : 'border-gray-300 hover:border-gray-400'
-                  )}
-                >
-                  <input
-                    type="checkbox"
-                    checked={formData.amenities?.includes(amenity.id)}
-                    onChange={() => toggleAmenity(amenity.id)}
-                    className="w-5 h-5 rounded border-gray-300 text-primary focus:ring-primary"
-                  />
-                  <span className="text-sm">{amenity.name}</span>
-                </label>
-              ))}
+              {amenities.map((amenity) => {
+                const amenityId = Number(amenity.id);
+                const isSelected = formData.amenityIds?.includes(amenityId) ?? false;
+                return (
+                  <label
+                    key={amenity.id}
+                    className={cn(
+                      'flex items-center gap-3 p-3 border rounded-lg cursor-pointer transition-colors',
+                      isSelected
+                        ? 'border-primary bg-primary/5'
+                        : 'border-gray-300 hover:border-gray-400'
+                    )}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={isSelected}
+                      onChange={() => toggleAmenity(amenityId)}
+                      className="w-5 h-5 rounded border-gray-300 text-primary focus:ring-primary"
+                    />
+                    <span className="text-sm">{amenity.name}</span>
+                  </label>
+                );
+              })}
             </div>
           </div>
         );
@@ -350,7 +321,7 @@ export const HostPropertyForm = ({
                       onClick={() =>
                         updateField(
                           'images',
-                          formData.images?.filter((_, i) => i !== index)
+                          (formData.images ?? []).filter((_, i) => i !== index)
                         )
                       }
                       className="absolute top-2 right-2 w-6 h-6 bg-white rounded-full flex items-center justify-center shadow-md hover:bg-gray-100"

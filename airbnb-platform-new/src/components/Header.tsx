@@ -105,11 +105,18 @@ export const Header = ({ user, onLogout, variant = 'default' }: HeaderProps) => 
               >
                 <Menu className="w-4 h-4" />
                 {user ? (
-                  <img
-                    src={user.avatar}
-                    alt={`${user.firstName} ${user.lastName}`}
-                    className="w-8 h-8 rounded-full object-cover"
-                  />
+                  user.profilePicture ? (
+                    <img
+                      src={user.profilePicture}
+                      alt={`${user.firstName} ${user.lastName}`}
+                      className="w-8 h-8 rounded-full object-cover"
+                    />
+                  ) : (
+                    <div className="w-8 h-8 rounded-full bg-gray-300 flex items-center justify-center text-xs font-semibold text-gray-700">
+                      {user.firstName.charAt(0)}
+                      {user.lastName.charAt(0)}
+                    </div>
+                  )
                 ) : (
                   <div className="w-8 h-8 rounded-full bg-gray-300 flex items-center justify-center">
                     <User className="w-4 h-4" />

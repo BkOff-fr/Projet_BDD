@@ -7,22 +7,28 @@ interface ReviewCardProps {
 }
 
 export const ReviewCard = ({ review }: ReviewCardProps) => {
+  const initials = `${review.user.firstName.charAt(0)}${review.user.lastName.charAt(0)}`.toUpperCase();
+
   return (
     <div className="space-y-4">
       {/* User Info */}
       <div className="flex items-center gap-3">
-        <img
-          src={review.user.avatar}
-          alt={`${review.user.firstName} ${review.user.lastName}`}
-          className="w-12 h-12 rounded-full object-cover"
-        />
+        {review.user.profilePicture ? (
+          <img
+            src={review.user.profilePicture}
+            alt={`${review.user.firstName} ${review.user.lastName}`}
+            className="w-12 h-12 rounded-full object-cover"
+          />
+        ) : (
+          <div className="w-12 h-12 rounded-full bg-gray-300 flex items-center justify-center text-sm font-semibold text-gray-700">
+            {initials}
+          </div>
+        )}
         <div>
           <p className="font-semibold text-gray-900">
             {review.user.firstName} {review.user.lastName}
           </p>
-          <p className="text-sm text-gray-500">
-            {review.user.isHost ? 'Host' : 'Guest'}
-          </p>
+          <p className="text-sm text-gray-500">Guest</p>
         </div>
       </div>
 
@@ -44,14 +50,24 @@ export const ReviewCard = ({ review }: ReviewCardProps) => {
       </div>
 
       {/* Comment */}
-      <p className="text-gray-700 leading-relaxed">{review.comment}</p>
+      {review.comment && (
+        <p className="text-gray-700 leading-relaxed">{review.comment}</p>
+      )}
 
       {/* Category Ratings */}
       <div className="flex flex-wrap gap-4 text-sm text-gray-500">
-        <span>Cleanliness: {review.categories.cleanliness.toFixed(1)}</span>
-        <span>Accuracy: {review.categories.accuracy.toFixed(1)}</span>
-        <span>Communication: {review.categories.communication.toFixed(1)}</span>
-        <span>Location: {review.categories.location.toFixed(1)}</span>
+        {review.categories.cleanliness !== null && (
+          <span>Cleanliness: {review.categories.cleanliness.toFixed(1)}</span>
+        )}
+        {review.categories.accuracy !== null && (
+          <span>Accuracy: {review.categories.accuracy.toFixed(1)}</span>
+        )}
+        {review.categories.communication !== null && (
+          <span>Communication: {review.categories.communication.toFixed(1)}</span>
+        )}
+        {review.categories.location !== null && (
+          <span>Location: {review.categories.location.toFixed(1)}</span>
+        )}
       </div>
     </div>
   );

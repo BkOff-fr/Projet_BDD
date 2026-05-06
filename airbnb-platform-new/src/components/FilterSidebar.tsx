@@ -1,8 +1,8 @@
 import { useState } from 'react';
-import { X, ChevronDown, ChevronUp, SlidersHorizontal } from 'lucide-react';
+import { X, ChevronDown, ChevronUp } from 'lucide-react';
 import { cn } from '@/utils/cn';
 import { amenities } from '@/data/mockData';
-import type { SearchFilters, PropertyType } from '@/types';
+import type { SearchFilters, AccommodationType } from '@/types';
 
 interface FilterSidebarProps {
   isOpen: boolean;
@@ -13,14 +13,15 @@ interface FilterSidebarProps {
   priceRange: { min: number; max: number };
 }
 
-const propertyTypes: { value: PropertyType; label: string }[] = [
+const propertyTypes: { value: AccommodationType; label: string }[] = [
   { value: 'studio', label: 'Studio' },
   { value: 'apartment', label: 'Apartment' },
   { value: 'house', label: 'House' },
   { value: 'villa', label: 'Villa' },
   { value: 'cabin', label: 'Cabin' },
   { value: 'condo', label: 'Condo' },
-  { value: 'loft', label: 'Loft' },
+  { value: 'guesthouse', label: 'Guesthouse' },
+  { value: 'private_room', label: 'Private room' },
 ];
 
 export const FilterSidebar = ({
@@ -56,7 +57,7 @@ export const FilterSidebar = ({
     });
   };
 
-  const togglePropertyType = (type: PropertyType) => {
+  const togglePropertyType = (type: AccommodationType) => {
     const currentTypes = filters.propertyTypes || [];
     const newTypes = currentTypes.includes(type)
       ? currentTypes.filter((t) => t !== type)
@@ -201,20 +202,23 @@ export const FilterSidebar = ({
             </button>
             {expandedSections.includes('amenities') && (
               <div className="mt-3 space-y-2">
-                {amenities.slice(0, 10).map((amenity) => (
-                  <label
-                    key={amenity.id}
-                    className="flex items-center gap-3 cursor-pointer"
-                  >
-                    <input
-                      type="checkbox"
-                      checked={filters.amenities?.includes(amenity.id)}
-                      onChange={() => toggleAmenity(amenity.id)}
-                      className="w-5 h-5 rounded border-gray-300 text-primary focus:ring-primary"
-                    />
-                    <span className="text-gray-700">{amenity.name}</span>
-                  </label>
-                ))}
+                {amenities.slice(0, 10).map((amenity) => {
+                  const amenityKey = String(amenity.id);
+                  return (
+                    <label
+                      key={amenityKey}
+                      className="flex items-center gap-3 cursor-pointer"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={filters.amenities?.includes(amenityKey)}
+                        onChange={() => toggleAmenity(amenityKey)}
+                        className="w-5 h-5 rounded border-gray-300 text-primary focus:ring-primary"
+                      />
+                      <span className="text-gray-700">{amenity.name}</span>
+                    </label>
+                  );
+                })}
               </div>
             )}
           </div>
@@ -241,17 +245,6 @@ export const FilterSidebar = ({
                     checked={filters.instantBook}
                     onChange={() =>
                       onUpdateFilters({ instantBook: !filters.instantBook })
-                    }
-                    className="w-5 h-5 rounded border-gray-300 text-primary focus:ring-primary"
-                  />
-                </label>
-                <label className="flex items-center justify-between cursor-pointer">
-                  <span className="text-gray-700">Superhost</span>
-                  <input
-                    type="checkbox"
-                    checked={filters.superhost}
-                    onChange={() =>
-                      onUpdateFilters({ superhost: !filters.superhost })
                     }
                     className="w-5 h-5 rounded border-gray-300 text-primary focus:ring-primary"
                   />

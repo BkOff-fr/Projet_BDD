@@ -1,6 +1,22 @@
-import { User, Accommodation, Booking, Message, Conversation } from '@/types';
+import type {
+  User,
+  Accommodation,
+  AccommodationDetail,
+  Booking,
+  Conversation,
+  Message,
+  Amenity,
+  RegisterInput,
+  LoginInput,
+  CreateAccommodationInput,
+  CreateBookingInput,
+  CreateReviewInput,
+  SendMessageInput,
+} from '@/types';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+const API_URL =
+  (import.meta as unknown as { env?: { VITE_API_URL?: string } }).env?.VITE_API_URL ||
+  'http://localhost:3001/api';
 
 // Generic fetch wrapper
 async function fetchAPI<T>(
@@ -8,12 +24,12 @@ async function fetchAPI<T>(
   options: RequestInit = {}
 ): Promise<T> {
   const token = localStorage.getItem('token');
-  
+
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     ...((options.headers as Record<string, string>) || {}),
   };
-  
+
   if (token) {
     headers['Authorization'] = `Bearer ${token}`;
   }
@@ -34,20 +50,14 @@ async function fetchAPI<T>(
 
 // Auth API
 export const authAPI = {
-  register: (userData: {
-    email: string;
-    password: string;
-    firstName: string;
-    lastName: string;
-    phone?: string;
-    isHost?: boolean;
-  }) => fetchAPI<{ user: User; token: string }>('/auth/register', {
-    method: 'POST',
-    body: JSON.stringify(userData),
-  }),
+  register: (userData: RegisterInput) =>
+    fetchAPI<{ message: string; user: User; token: string }>('/auth/register', {
+      method: 'POST',
+      body: JSON.stringify(userData),
+    }),
 
-  login: (credentials: { email: string; password: string }) =>
-    fetchAPI<{ user: User; token: string }>('/auth/login', {
+  login: (credentials: LoginInput) =>
+    fetchAPI<{ message: string; user: User; token: string }>('/auth/login', {
       method: 'POST',
       body: JSON.stringify(credentials),
     }),
@@ -76,35 +86,16 @@ export const accommodationsAPI = {
     return fetchAPI<Accommodation[]>(`/accommodations${query}`);
   },
 
-  getById: (id: string) => fetchAPI<Accommodation>(`/accommodations/${id}`),
+  getById: (id: string | number) =>
+    fetchAPI<AccommodationDetail>(`/accommodations/${id}`),
 
-  create: (data: {
-    title: string;
-    description: string;
-    type: string;
-    address: string;
-    city: string;
-    country: string;
-    latitude?: number;
-    longitude?: number;
-    maxGuests: number;
-    bedrooms: number;
-    beds: number;
-    bathrooms: number;
-    pricePerNight: number;
-    cleaningFee?: number;
-    serviceFee?: number;
-    minimumNights: number;
-    maximumNights?: number;
-    instantBook?: boolean;
-    houseRules?: string;
-    amenityIds?: number[];
-  }) => fetchAPI<{ message: string; id: number }>('/accommodations', {
-    method: 'POST',
-    body: JSON.stringify(data),
-  }),
+  create: (data: CreateAccommodationInput) =>
+    fetchAPI<{ message: string; id: number }>('/accommodations', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
 
-  getAmenities: () => fetchAPI<{ id: number; name: string; category: string; icon?: string }[]>('/accommodations/amenities'),
+  getAmenities: () => fetchAPI<Amenity[]>('/accommodations/amenities'),
 };
 
 // Bookings API
@@ -114,59 +105,44 @@ export const bookingsAPI = {
     return fetchAPI<Booking[]>(`/bookings${query}`);
   },
 
-  create: (data: {
-    accommodationId: number;
-    checkInDate: string;
-    checkOutDate: string;
-    numGuests: number;
-    specialRequests?: string;
-  }) => fetchAPI<{ message: string; id: number; totalPrice: string }>('/bookings', {
-    method: 'POST',
-    body: JSON.stringify(data),
-  }),
+  create: (data: CreateBookingInput) =>
+    fetchAPI<{ message: string; id: number; totalPrice: string }>('/bookings', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
 
-  cancel: (id: string) => fetchAPI<{ message: string }>(`/bookings/${id}/cancel`, {
-    method: 'PATCH',
-  }),
+  cancel: (id: string | number) =>
+    fetchAPI<{ message: string }>(`/bookings/${id}/cancel`, {
+      method: 'PATCH',
+    }),
 
-  createReview: (data: {
-    bookingId: number;
-    rating: number;
-    comment?: string;
-    cleanlinessRating?: number;
-    accuracyRating?: number;
-    checkinRating?: number;
-    communicationRating?: number;
-    locationRating?: number;
-    valueRating?: number;
-  }) => fetchAPI<{ message: string }>('/bookings/review', {
-    method: 'POST',
-    body: JSON.stringify(data),
-  }),
+  createReview: (data: CreateReviewInput) =>
+    fetchAPI<{ message: string }>('/bookings/review', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
 };
 
 // Messages API
 export const messagesAPI = {
   getConversations: () => fetchAPI<Conversation[]>('/messages'),
 
-  getConversation: (userId: string) => fetchAPI<{
-    otherUser: {
-      id: number;
-      firstName: string;
-      lastName: string;
-      profilePicture?: string;
-    };
-    messages: Message[];
-  }>(`/messages/${userId}`),
+  getConversation: (userId: string | number) =>
+    fetchAPI<{
+      otherUser: {
+        id: number;
+        firstName: string;
+        lastName: string;
+        profilePicture?: string | null;
+      };
+      messages: Message[];
+    }>(`/messages/${userId}`),
 
-  send: (data: {
-    receiverId: number;
-    accommodationId?: number;
-    content: string;
-  }) => fetchAPI<{ message: string; id: number }>('/messages', {
-    method: 'POST',
-    body: JSON.stringify(data),
-  }),
+  send: (data: SendMessageInput) =>
+    fetchAPI<{ message: string; id: number }>('/messages', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
 
   getUnreadCount: () => fetchAPI<{ count: number }>('/messages/unread'),
 };

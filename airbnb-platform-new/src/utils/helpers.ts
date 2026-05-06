@@ -1,5 +1,17 @@
-import { format, differenceInDays, isWithinInterval, parseISO } from 'date-fns';
-import type { Accommodation, Booking, SearchFilters } from '@/types';
+import { format, differenceInDays, parseISO } from 'date-fns';
+import type { Accommodation, SearchFilters } from '@/types';
+
+/**
+ * Single placeholder image used wherever the UI expects an accommodation
+ * cover image but the BDD has no images table yet. Tracked as a known gap
+ * to be addressed in a future task.
+ */
+export const PLACEHOLDER_IMAGE =
+  'https://images.unsplash.com/photo-1568605114967-8130f3a36994?w=800&h=600&fit=crop';
+
+/** Convenience helper: returns the accommodation cover image, or the placeholder. */
+export const getAccommodationImage = (accommodation: { coverImage?: string }): string =>
+  accommodation.coverImage ?? PLACEHOLDER_IMAGE;
 
 // Format currency
 export const formatCurrency = (amount: number, currency = 'USD'): string => {
@@ -51,7 +63,7 @@ export const generateStarRating = (rating: number): string => {
   const fullStars = Math.floor(rating);
   const hasHalfStar = rating % 1 >= 0.5;
   const emptyStars = 5 - fullStars - (hasHalfStar ? 1 : 0);
-  
+
   return '★'.repeat(fullStars) + (hasHalfStar ? '½' : '') + '☆'.repeat(emptyStars);
 };
 
@@ -81,28 +93,24 @@ export const filterAccommodations = (
       }
     }
 
-    // Property type filter
+    // Property type filter — uses single `type` enum from the backend.
     if (filters.propertyTypes && filters.propertyTypes.length > 0) {
-      if (!filters.propertyTypes.includes(acc.propertyType)) {
+      if (!filters.propertyTypes.includes(acc.type)) {
         return false;
       }
     }
 
-    // Amenities filter
+    // Amenities filter — match by amenity id (backend returns Amenity[]).
     if (filters.amenities && filters.amenities.length > 0) {
-      const hasAllAmenities = filters.amenities.every((amenity) =>
-        acc.amenities.includes(amenity)
+      const accAmenityIds = acc.amenities.map((a) => String(a.id));
+      const hasAllAmenities = filters.amenities.every((id) =>
+        accAmenityIds.includes(id)
       );
       if (!hasAllAmenities) return false;
     }
 
     // Instant book filter
     if (filters.instantBook && !acc.instantBook) {
-      return false;
-    }
-
-    // Superhost filter
-    if (filters.superhost && !acc.isSuperhost) {
       return false;
     }
 
@@ -119,17 +127,6 @@ export const filterAccommodations = (
   });
 };
 
-// Check if dates are available
-export const checkAvailability = (
-  accommodation: Accommodation,
-  checkIn: Date,
-  checkOut: Date
-): boolean => {
-  // In a real app, this would check against actual availability data
-  // For mock data, we'll assume all dates are available
-  return true;
-};
-
 // Get unique cities from accommodations
 export const getUniqueCities = (accommodations: Accommodation[]): string[] => {
   const cities = new Set(accommodations.map((acc) => acc.location.city));
@@ -141,7 +138,7 @@ export const getPriceRange = (
   accommodations: Accommodation[]
 ): { min: number; max: number } => {
   if (accommodations.length === 0) return { min: 0, max: 0 };
-  
+
   const prices = accommodations.map((acc) => acc.pricePerNight);
   return {
     min: Math.min(...prices),
@@ -155,7 +152,7 @@ export const debounce = <T extends (...args: unknown[]) => unknown>(
   wait: number
 ): ((...args: Parameters<T>) => void) => {
   let timeout: ReturnType<typeof setTimeout> | null = null;
-  
+
   return (...args: Parameters<T>) => {
     if (timeout) clearTimeout(timeout);
     timeout = setTimeout(() => func(...args), wait);
@@ -167,32 +164,23 @@ export const getInitials = (firstName: string, lastName: string): string => {
   return `${firstName.charAt(0)}${lastName.charAt(0)}`.toUpperCase();
 };
 
-// Get property type label
-export const getPropertyTypeLabel = (type: string): string => {
+// Get accommodation type label (single dimension — matches backend enum)
+export const getAccommodationTypeLabel = (type: string): string => {
   const labels: Record<string, string> = {
-    studio: 'Studio',
     apartment: 'Apartment',
     house: 'House',
     villa: 'Villa',
-    cabin: 'Cabin',
     condo: 'Condo',
-    loft: 'Loft',
-    entire_place: 'Entire place',
+    cabin: 'Cabin',
+    guesthouse: 'Guesthouse',
+    studio: 'Studio',
     private_room: 'Private room',
-    shared_room: 'Shared room',
   };
   return labels[type] || type;
 };
 
-// Get accommodation type label
-export const getAccommodationTypeLabel = (type: string): string => {
-  const labels: Record<string, string> = {
-    entire_place: 'Entire place',
-    private_room: 'Private room',
-    shared_room: 'Shared room',
-  };
-  return labels[type] || type;
-};
+// Backwards-compatible alias for components still calling `getPropertyTypeLabel`.
+export const getPropertyTypeLabel = getAccommodationTypeLabel;
 
 // Scroll to top
 export const scrollToTop = (): void => {

@@ -1,7 +1,6 @@
 import { useState, useCallback, useMemo } from 'react';
 import { differenceInDays } from 'date-fns';
-import type { Accommodation, Booking } from '@/types';
-import { bookings as mockBookings } from '@/data/mockData';
+import type { Accommodation, AccommodationDetail } from '@/types';
 
 interface BookingFormData {
   checkIn: Date | null;
@@ -15,7 +14,7 @@ interface BookingFormData {
 }
 
 interface UseBookingProps {
-  accommodation: Accommodation;
+  accommodation: Accommodation | AccommodationDetail;
 }
 
 export const useBooking = ({ accommodation }: UseBookingProps) => {
@@ -49,8 +48,8 @@ export const useBooking = ({ accommodation }: UseBookingProps) => {
     }
 
     const subtotal = accommodation.pricePerNight * nights;
-    const cleaningFee = accommodation.cleaningFee;
-    const serviceFee = accommodation.serviceFee;
+    const cleaningFee = accommodation.cleaningFee ?? 0;
+    const serviceFee = accommodation.serviceFee ?? 0;
     const total = subtotal + cleaningFee + serviceFee;
 
     return {
@@ -88,36 +87,35 @@ export const useBooking = ({ accommodation }: UseBookingProps) => {
     }));
   }, []);
 
-  const createBooking = useCallback(async (): Promise<Booking | null> => {
+  /**
+   * Creates a booking and returns its id (or null if invalid). The actual
+   * API call is wired up in P0-T3+; for now this is a stub that just
+   * surfaces the validated form state so components can navigate to the
+   * confirmation page. When the real API is wired, this will call
+   * `bookingsAPI.create({ ... })`.
+   */
+  const createBooking = useCallback(async (): Promise<{
+    accommodationId: number;
+    checkIn: Date;
+    checkOut: Date;
+    guests: BookingFormData['guests'];
+    nights: number;
+    totalPrice: number;
+  } | null> => {
     if (!isValid) return null;
 
     setIsSubmitting(true);
-    
-    // Simulate API call
-    await new Promise((resolve) => setTimeout(resolve, 1500));
+    await new Promise((resolve) => setTimeout(resolve, 800));
+    setIsSubmitting(false);
 
-    const newBooking: Booking = {
-      id: `b${Date.now()}`,
+    return {
       accommodationId: accommodation.id,
-      accommodation,
-      guestId: 'u1', // Current user
-      guest: mockBookings[0].guest,
-      hostId: accommodation.hostId,
       checkIn: formData.checkIn!,
       checkOut: formData.checkOut!,
       guests: formData.guests,
-      totalNights: nights,
-      pricePerNight: accommodation.pricePerNight,
-      cleaningFee: accommodation.cleaningFee,
-      serviceFee: accommodation.serviceFee,
+      nights,
       totalPrice: pricing.total,
-      status: 'pending',
-      createdAt: new Date(),
-      paymentStatus: 'pending',
     };
-
-    setIsSubmitting(false);
-    return newBooking;
   }, [isValid, accommodation, formData, nights, pricing.total]);
 
   return {

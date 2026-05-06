@@ -45,9 +45,13 @@ export const BookingForm = ({ accommodation, onSubmit, className }: BookingFormP
         </div>
         <div className="flex items-center gap-1">
           <span className="text-primary">★</span>
-          <span className="font-semibold">{accommodation.rating.toFixed(2)}</span>
+          <span className="font-semibold">
+            {accommodation.rating.average !== null
+              ? accommodation.rating.average.toFixed(2)
+              : 'New'}
+          </span>
           <span className="text-gray-500 underline">
-            {accommodation.reviewCount} reviews
+            {accommodation.rating.count} reviews
           </span>
         </div>
       </div>

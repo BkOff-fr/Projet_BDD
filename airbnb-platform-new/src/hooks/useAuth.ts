@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect } from 'react';
-import type { User } from '@/types';
+import type { User, RegisterInput } from '@/types';
 import { authAPI } from '@/services/api';
 
 interface AuthState {
@@ -66,14 +66,7 @@ export const useAuth = () => {
     }
   }, []);
 
-  const register = useCallback(async (userData: {
-    email: string;
-    password: string;
-    firstName: string;
-    lastName: string;
-    phone?: string;
-    isHost?: boolean;
-  }): Promise<boolean> => {
+  const register = useCallback(async (userData: RegisterInput): Promise<boolean> => {
     try {
       setAuth(prev => ({ ...prev, isLoading: true, error: null }));
       const { user, token } = await authAPI.register(userData);
