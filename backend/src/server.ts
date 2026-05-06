@@ -5,6 +5,8 @@ import authRoutes from './routes/auth';
 import accommodationRoutes from './routes/accommodations';
 import bookingRoutes from './routes/bookings';
 import messageRoutes from './routes/messages';
+import userRoutes from './routes/users';
+import hostRoutes from './routes/host';
 import { errorHandler } from './middleware/errorHandler';
 
 dotenv.config();
@@ -31,6 +33,8 @@ app.use('/api/auth', authRoutes);
 app.use('/api/accommodations', accommodationRoutes);
 app.use('/api/bookings', bookingRoutes);
 app.use('/api/messages', messageRoutes);
+app.use('/api/users', userRoutes);
+app.use('/api/host', hostRoutes);
 
 // 404 handler
 app.use((req, res) => {
