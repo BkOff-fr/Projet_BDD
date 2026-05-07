@@ -307,11 +307,18 @@ export const getAvailabilityCalendar = asyncHandler(async (req: AuthRequest, res
   const params: any[] = [propertyId];
 
   if (year && month) {
-    query += ` AND (
-      (YEAR(start_date) = ? AND MONTH(start_date) = ?) OR
-      (YEAR(end_date) = ? AND MONTH(end_date) = ?)
-    )`;
-    params.push(year, month, year, month);
+    // Interval-overlap predicate: an availability row [start_date, end_date]
+    // overlaps the queried month [firstDay, lastDay] iff
+    //   start_date <= lastDay AND end_date >= firstDay.
+    // This catches all four overlap shapes — including the previously-missed
+    // case of a multi-month range that fully spans the queried month (e.g.
+    // start in January, end in March, queried month February). The earlier
+    // start-or-end-month-equals filter dropped those rows entirely, which
+    // made the host calendar render days as available when they were in fact
+    // blocked, and let hosts submit overlapping blocks unknowingly.
+    const firstDay = `${String(year).padStart(4, '0')}-${String(month).padStart(2, '0')}-01`;
+    query += ` AND start_date <= LAST_DAY(?) AND end_date >= ?`;
+    params.push(firstDay, firstDay);
   }
 
   query += ` ORDER BY start_date`;
