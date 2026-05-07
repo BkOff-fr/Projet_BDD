@@ -221,7 +221,7 @@ export const LeaveReviewModal = ({
       description={subtitle}
       submitting={submitting}
       initialFocusRef={firstStarRef}
-      panelClassName="max-w-lg max-h-[90vh] overflow-y-auto"
+      panelClassName="max-w-lg"
     >
       <div className="px-6 py-4 space-y-5">
         {/* Overall rating — required */}

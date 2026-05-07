@@ -66,14 +66,30 @@ export const ModalShell = ({
   const titleId = `modal-shell-title-${reactId}`;
   const descId = `modal-shell-desc-${reactId}`;
   const closeButtonRef = useRef<HTMLButtonElement | null>(null);
+  // Stored in a ref so React 18 Strict Mode's effect mount/unmount/remount
+  // dance doesn't re-capture `document.activeElement` after we've already
+  // moved focus into the modal. See `wasOpenRef` below for the leading-edge
+  // guard.
+  const previouslyFocusedRef = useRef<HTMLElement | null>(null);
+  const wasOpenRef = useRef(false);
 
   // Focus management + inert root + state restoration on open/close.
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      wasOpenRef.current = false;
+      return;
+    }
 
     // Capture the element that had focus when the modal opened so we can
-    // restore it on close (typically the trigger button).
-    const previouslyFocused = document.activeElement as HTMLElement | null;
+    // restore it on close (typically the trigger button). Only capture on
+    // the actual `false → true` transition — Strict Mode runs the effect,
+    // tears it down, and re-runs on mount, and by the time of the second
+    // run our setTimeout below has already moved focus to the close button.
+    if (!wasOpenRef.current) {
+      previouslyFocusedRef.current =
+        document.activeElement as HTMLElement | null;
+      wasOpenRef.current = true;
+    }
 
     // Mark #root inert so Tab/Shift+Tab can't reach background controls.
     // The modal itself is portaled to document.body, so it stays interactive.
@@ -89,7 +105,8 @@ export const ModalShell = ({
     return () => {
       window.clearTimeout(t);
       if (root) root.removeAttribute('inert');
-      previouslyFocused?.focus();
+      previouslyFocusedRef.current?.focus();
+      previouslyFocusedRef.current = null;
     };
   }, [open, initialFocusRef]);
 
@@ -126,11 +143,18 @@ export const ModalShell = ({
         aria-labelledby={titleId}
         aria-describedby={description ? descId : undefined}
         className={cn(
-          'bg-white rounded-xl w-full shadow-xl',
+          // Always a column with a hard ceiling on height so the children
+          // area can scroll independently of the (always-visible) header.
+          // Callers should NOT add `max-h-[90vh] overflow-y-auto` to
+          // `panelClassName` — that scrolls the header off-screen on tall
+          // modals. ModalShell handles this for them.
+          'bg-white rounded-xl w-full shadow-xl flex flex-col max-h-[90vh]',
           panelClassName ?? 'max-w-md'
         )}
       >
-        <div className="flex items-start justify-between gap-3 px-6 pt-6 pb-2">
+        {/* Header bar — never scrolls. `flex-shrink-0` keeps it from being
+            squeezed when the children area grows past the panel height. */}
+        <div className="flex items-start justify-between gap-3 px-6 pt-6 pb-2 flex-shrink-0">
           <div className="flex items-start gap-3 min-w-0">
             {icon}
             <div className="min-w-0">
@@ -155,7 +179,10 @@ export const ModalShell = ({
             <X className="w-5 h-5" />
           </button>
         </div>
-        {children}
+        {/* Scroll container for modal-specific content. Existing modals
+            apply their own internal `px-6 py-4` / `pb-6` padding inside
+            `children`, so we don't add padding here — that would double up. */}
+        <div className="flex-1 overflow-y-auto min-h-0">{children}</div>
       </div>
     </div>,
     document.body

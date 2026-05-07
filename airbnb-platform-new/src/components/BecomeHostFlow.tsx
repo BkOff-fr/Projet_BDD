@@ -45,8 +45,6 @@ export const BecomeHostFlow = ({
     setError(null);
   }, [open]);
 
-  if (!open) return null;
-
   const canSubmit = agreeToTerms && !submitting;
 
   const handleConfirm = async () => {

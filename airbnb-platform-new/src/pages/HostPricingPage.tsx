@@ -107,8 +107,6 @@ const AddPricingRuleModal = ({
     setError(null);
   }, [open]);
 
-  if (!open) return null;
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
@@ -171,7 +169,7 @@ const AddPricingRuleModal = ({
       description="Adjust nightly price for a date range (e.g. holidays, off-season)."
       submitting={submitting}
       initialFocusRef={nameInputRef}
-      panelClassName="max-w-md max-h-[90vh] overflow-y-auto"
+      panelClassName="max-w-md"
     >
       {/* The form is content; ModalShell is the dialog frame. Submit is wired
           via the form's onSubmit so Enter inside any input triggers it. */}

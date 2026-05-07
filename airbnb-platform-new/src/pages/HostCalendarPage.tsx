@@ -236,8 +236,6 @@ const BlockDatesModal = ({
     setReason('');
   }, [open, defaultStart]);
 
-  if (!open) return null;
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);

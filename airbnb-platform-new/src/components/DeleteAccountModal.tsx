@@ -56,8 +56,6 @@ export const DeleteAccountModal = ({
     setError(null);
   }, [open]);
 
-  if (!open) return null;
-
   const confirmationOk = confirmation === REQUIRED_CONFIRMATION;
   const passwordOk = password.length > 0;
   const canSubmit = confirmationOk && passwordOk && !submitting;
