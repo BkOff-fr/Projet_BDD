@@ -13,6 +13,7 @@ import {
 import { bookingsAPI } from '@/services/api';
 import { cn } from '@/utils/cn';
 import {
+  dateKey,
   formatCurrency,
   formatDate,
   calculateNights,
@@ -29,9 +30,6 @@ interface BookingState {
     guests: { adults: number; children: number; infants: number; pets: number };
   };
 }
-
-/** Format a `Date` as `YYYY-MM-DD` (the shape the API expects). */
-const toYMD = (d: Date) => d.toISOString().split('T')[0];
 
 export const BookingConfirmation = () => {
   const location = useLocation();
@@ -93,8 +91,8 @@ export const BookingConfirmation = () => {
     try {
       await bookingsAPI.create({
         accommodationId: accommodation.id,
-        checkInDate: toYMD(bookingData.checkIn!),
-        checkOutDate: toYMD(bookingData.checkOut!),
+        checkInDate: dateKey(bookingData.checkIn!),
+        checkOutDate: dateKey(bookingData.checkOut!),
         numGuests: Math.max(1, numGuests),
         // The form has no special-requests field today; leave undefined.
       });
