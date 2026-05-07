@@ -307,6 +307,20 @@ export const getAvailabilityCalendar = asyncHandler(async (req: AuthRequest, res
   const params: any[] = [propertyId];
 
   if (year && month) {
+    // Validate query params: untyped strings from req.query must be coerced
+    // and range-checked. Without this, month=13/year="foo" yield a malformed
+    // date string, LAST_DAY() returns NULL, and `start_date <= NULL` is
+    // always falsy — silently returning no rows instead of a clear 400.
+    const yearNum = parseInt(String(year), 10);
+    const monthNum = parseInt(String(month), 10);
+    if (
+      Number.isNaN(yearNum) || Number.isNaN(monthNum) ||
+      monthNum < 1 || monthNum > 12 ||
+      yearNum < 1900 || yearNum > 2100
+    ) {
+      res.status(400).json({ error: 'Invalid year or month parameter' });
+      return;
+    }
     // Interval-overlap predicate: an availability row [start_date, end_date]
     // overlaps the queried month [firstDay, lastDay] iff
     //   start_date <= lastDay AND end_date >= firstDay.
@@ -316,7 +330,8 @@ export const getAvailabilityCalendar = asyncHandler(async (req: AuthRequest, res
     // start-or-end-month-equals filter dropped those rows entirely, which
     // made the host calendar render days as available when they were in fact
     // blocked, and let hosts submit overlapping blocks unknowingly.
-    const firstDay = `${String(year).padStart(4, '0')}-${String(month).padStart(2, '0')}-01`;
+    // Compute first day as YYYY-MM-01 — LAST_DAY() in SQL gives the last day.
+    const firstDay = `${String(yearNum).padStart(4, '0')}-${String(monthNum).padStart(2, '0')}-01`;
     query += ` AND start_date <= LAST_DAY(?) AND end_date >= ?`;
     params.push(firstDay, firstDay);
   }
