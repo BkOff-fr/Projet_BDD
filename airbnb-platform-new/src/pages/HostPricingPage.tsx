@@ -585,7 +585,12 @@ export const HostPricingPage = () => {
   const [ownershipLoading, setOwnershipLoading] = useState(true);
   const [rulesLoading, setRulesLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [reloadKey, setReloadKey] = useState(0);
+  // Two distinct reload keys: data-only refetches (after add/delete) avoid
+  // re-running the ownership effect (which would flash LoadingState because
+  // `loading` is OR'd with ownershipLoading). The user-initiated retry
+  // increments BOTH so a retry after an ownership-side failure works.
+  const [ownershipReloadKey, setOwnershipReloadKey] = useState(0);
+  const [dataReloadKey, setDataReloadKey] = useState(0);
 
   const [addModalOpen, setAddModalOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<PricingRule | null>(null);
@@ -622,7 +627,7 @@ export const HostPricingPage = () => {
     return () => {
       cancelled = true;
     };
-  }, [propertyId, propertyIdValid, reloadKey]);
+  }, [propertyId, propertyIdValid, ownershipReloadKey]);
 
   // Effect 2: rules fetch. Gated on ownership being resolved.
   useEffect(() => {
@@ -649,7 +654,7 @@ export const HostPricingPage = () => {
     return () => {
       cancelled = true;
     };
-  }, [propertyId, propertyIdValid, property, reloadKey]);
+  }, [propertyId, propertyIdValid, property, dataReloadKey]);
 
   const loading = ownershipLoading || (property !== null && rulesLoading);
 
@@ -670,12 +675,20 @@ export const HostPricingPage = () => {
     return (
       <ErrorState
         message={error ?? 'Could not load pricing rules.'}
-        onRetry={() => setReloadKey((k) => k + 1)}
+        onRetry={() => {
+          // Re-run BOTH effects: a failure here could be on the ownership
+          // path or the rules-fetch path, so the explicit retry refreshes both.
+          setOwnershipReloadKey((k) => k + 1);
+          setDataReloadKey((k) => k + 1);
+        }}
       />
     );
   }
 
-  const refetch = () => setReloadKey((k) => k + 1);
+  // Mutation refetch — only re-runs Effect 2 (rules data). We deliberately
+  // do NOT bump ownershipReloadKey here so add/delete doesn't cause the
+  // LoadingState to flicker (loading = ownershipLoading || rulesLoading).
+  const refetch = () => setDataReloadKey((k) => k + 1);
 
   return (
     <div className="min-h-screen bg-gray-50">

@@ -358,8 +358,14 @@ export const createAccommodation = asyncHandler(async (req: AuthRequest, res: Re
     );
   }
   if (data.serviceFee != null) {
+    // Store as flat dollar amount (FALSE), matching how cleaning_fee is stored
+    // and matching what the form actually collects (a $ value, not a %).
+    // Previously hardcoded TRUE caused the booking calculator to charge
+    // is_percentage=1 → tiny amounts (e.g. $0.50 instead of $25). Existing
+    // seed rows storing service fees as percentages still work because the
+    // calculator reads is_percentage per-row.
     await pool.execute(
-      `INSERT INTO accommodation_fees (accommodation_id, fee_type, amount, is_percentage) VALUES (?, 'service', ?, TRUE)`,
+      `INSERT INTO accommodation_fees (accommodation_id, fee_type, amount, is_percentage) VALUES (?, 'service', ?, FALSE)`,
       [accommodationId, data.serviceFee]
     );
   }

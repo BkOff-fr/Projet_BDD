@@ -82,6 +82,17 @@ export const HostPropertyForm = ({
         if (cancelled) return;
         setAmenities(amenityList);
         setPolicies(policyList);
+        // Auto-select the first cancellation policy if the host hasn't
+        // touched the dropdown yet. Without this, the <select> visually
+        // shows the first option (because value="" falls back to the
+        // first <option> in the rendered list once the loading placeholder
+        // is gone) but `formData.cancellationPolicyId` is still undefined,
+        // and submission fails with "Please select a cancellation policy."
+        setFormData((prev) =>
+          prev.cancellationPolicyId == null && policyList.length > 0
+            ? { ...prev, cancellationPolicyId: policyList[0].id }
+            : prev
+        );
       })
       .catch(() => {
         if (cancelled) return;

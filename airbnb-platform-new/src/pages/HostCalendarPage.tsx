@@ -617,7 +617,12 @@ export const HostCalendarPage = () => {
   const [calendar, setCalendar] = useState<AvailabilityCalendar | null>(null);
   const [calendarLoading, setCalendarLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [reloadKey, setReloadKey] = useState(0);
+  // Two distinct reload keys so a normal mutation refetch only re-runs the
+  // calendar effect (no LoadingState flicker from re-fetching properties),
+  // while the user-initiated "Try again" retry hits both effects in case
+  // the failure was on the ownership path.
+  const [ownershipReloadKey, setOwnershipReloadKey] = useState(0);
+  const [dataReloadKey, setDataReloadKey] = useState(0);
 
   // Modal state. We separately track "which day was clicked" for the Block
   // form (defaults `startDate`) and "which existing block row" for Unblock.
@@ -664,12 +669,12 @@ export const HostCalendarPage = () => {
     return () => {
       cancelled = true;
     };
-  }, [propertyId, propertyIdValid, reloadKey]);
+  }, [propertyId, propertyIdValid, ownershipReloadKey]);
 
   // Effect 2: calendar fetch. Re-runs on month navigation and after a
-  // mutation (reloadKey). Gated on `property` being resolved so we don't fire
-  // the calendar request before ownership is confirmed (and don't fire it at
-  // all when the user has no access).
+  // mutation (dataReloadKey). Gated on `property` being resolved so we don't
+  // fire the calendar request before ownership is confirmed (and don't fire
+  // it at all when the user has no access).
   useEffect(() => {
     if (!propertyIdValid || !property) return;
     let cancelled = false;
@@ -689,7 +694,7 @@ export const HostCalendarPage = () => {
     return () => {
       cancelled = true;
     };
-  }, [propertyId, propertyIdValid, property, year, month, reloadKey]);
+  }, [propertyId, propertyIdValid, property, year, month, dataReloadKey]);
 
   const loading = ownershipLoading || (property !== null && calendarLoading);
 
@@ -717,7 +722,12 @@ export const HostCalendarPage = () => {
     return (
       <ErrorState
         message={error ?? 'Could not load this calendar.'}
-        onRetry={() => setReloadKey((k) => k + 1)}
+        onRetry={() => {
+          // Re-run BOTH effects: the failure could have been on either path,
+          // so the user-initiated retry should refresh ownership AND data.
+          setOwnershipReloadKey((k) => k + 1);
+          setDataReloadKey((k) => k + 1);
+        }}
       />
     );
   }
@@ -756,7 +766,11 @@ export const HostCalendarPage = () => {
     setBlockModalOpen(true);
   };
 
-  const refetch = () => setReloadKey((k) => k + 1);
+  // Mutation refetch — only re-runs Effect 2 (calendar data). We deliberately
+  // do NOT bump ownershipReloadKey here, because re-fetching properties on
+  // every block/unblock would flash the LoadingState (since `loading` is
+  // gated on ownershipLoading too).
+  const refetch = () => setDataReloadKey((k) => k + 1);
 
   return (
     <div className="min-h-screen bg-gray-50">
