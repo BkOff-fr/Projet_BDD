@@ -19,7 +19,7 @@ import { bookingsAPI } from '@/services/api';
 import { cn } from '@/utils/cn';
 import {
   formatCurrency,
-  formatDate,
+  formatLocalDate,
   PLACEHOLDER_IMAGE,
   getAccommodationTypeLabel,
 } from '@/utils/helpers';
@@ -149,8 +149,8 @@ const BookingCard = ({
           <div className="flex items-center gap-1.5">
             <Calendar className="w-4 h-4 text-gray-500 flex-shrink-0" />
             <span>
-              {formatDate(booking.checkInDate, 'MMM d')} -{' '}
-              {formatDate(booking.checkOutDate, 'MMM d, yyyy')}
+              {formatLocalDate(booking.checkInDate, 'MMM d')} -{' '}
+              {formatLocalDate(booking.checkOutDate, 'MMM d, yyyy')}
             </span>
           </div>
           <div className="flex items-center gap-1.5">

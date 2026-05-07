@@ -21,7 +21,7 @@ import { cn } from '@/utils/cn';
 import {
   PLACEHOLDER_IMAGE,
   formatCurrency,
-  formatDate,
+  formatLocalDate,
   getAccommodationTypeLabel,
 } from '@/utils/helpers';
 import type { Booking, BookingStatus } from '@/types';
@@ -220,8 +220,8 @@ export const BookingDetailPage = () => {
             Trip to {accommodation.location.city}
           </h1>
           <p className="text-gray-600 mt-1">
-            {formatDate(booking.checkInDate, 'MMM d, yyyy')} -{' '}
-            {formatDate(booking.checkOutDate, 'MMM d, yyyy')}
+            {formatLocalDate(booking.checkInDate, 'MMM d, yyyy')} -{' '}
+            {formatLocalDate(booking.checkOutDate, 'MMM d, yyyy')}
           </p>
         </header>
 
@@ -290,7 +290,7 @@ export const BookingDetailPage = () => {
                 Check-in
               </dt>
               <dd className="font-medium text-gray-900 mt-0.5">
-                {formatDate(booking.checkInDate, 'EEE, MMM d, yyyy')}
+                {formatLocalDate(booking.checkInDate, 'EEE, MMM d, yyyy')}
               </dd>
             </div>
             <div>
@@ -299,7 +299,7 @@ export const BookingDetailPage = () => {
                 Check-out
               </dt>
               <dd className="font-medium text-gray-900 mt-0.5">
-                {formatDate(booking.checkOutDate, 'EEE, MMM d, yyyy')}
+                {formatLocalDate(booking.checkOutDate, 'EEE, MMM d, yyyy')}
               </dd>
             </div>
             <div>

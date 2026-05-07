@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Star } from 'lucide-react';
 import { bookingsAPI } from '@/services/api';
 import { cn } from '@/utils/cn';
-import { formatDate } from '@/utils/helpers';
+import { formatLocalDate } from '@/utils/helpers';
 import { ModalShell } from './ModalShell';
 import type { Booking, CreateReviewInput } from '@/types';
 
@@ -208,10 +208,10 @@ export const LeaveReviewModal = ({
     setCategoryRatings((prev) => ({ ...prev, [key]: value }));
   };
 
-  const subtitle = `${booking.accommodation.title} · ${formatDate(
+  const subtitle = `${booking.accommodation.title} · ${formatLocalDate(
     booking.checkInDate,
     'MMM d'
-  )} → ${formatDate(booking.checkOutDate, 'MMM d, yyyy')}`;
+  )} → ${formatLocalDate(booking.checkOutDate, 'MMM d, yyyy')}`;
 
   return (
     <ModalShell

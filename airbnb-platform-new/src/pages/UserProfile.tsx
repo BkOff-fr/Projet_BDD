@@ -14,6 +14,7 @@ import { usersAPI, bookingsAPI, hostAPI } from '@/services/api';
 import { cn } from '@/utils/cn';
 import {
   formatDate,
+  formatLocalDate,
   PLACEHOLDER_IMAGE,
   formatCurrency,
 } from '@/utils/helpers';
@@ -305,8 +306,8 @@ export const UserProfile = ({ user }: UserProfileProps) => {
                               {booking.accommodation.title}
                             </p>
                             <p className="text-sm text-gray-500">
-                              {formatDate(booking.checkInDate, 'MMM d')} -{' '}
-                              {formatDate(booking.checkOutDate, 'MMM d, yyyy')}
+                              {formatLocalDate(booking.checkInDate, 'MMM d')} -{' '}
+                              {formatLocalDate(booking.checkOutDate, 'MMM d, yyyy')}
                             </p>
                           </div>
                         </div>

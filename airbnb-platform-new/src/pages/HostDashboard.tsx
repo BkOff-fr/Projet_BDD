@@ -22,7 +22,7 @@ import { hostAPI, accommodationsAPI } from '@/services/api';
 import { cn } from '@/utils/cn';
 import {
   formatCurrency,
-  formatDate,
+  formatLocalDate,
   PLACEHOLDER_IMAGE,
 } from '@/utils/helpers';
 import type {
@@ -342,8 +342,8 @@ export const HostDashboard = ({ user }: HostDashboardProps) => {
                               {booking.accommodation_title}
                             </p>
                             <p className="text-sm text-gray-600">
-                              {formatDate(booking.check_in_date, 'MMM d')} -{' '}
-                              {formatDate(
+                              {formatLocalDate(booking.check_in_date, 'MMM d')} -{' '}
+                              {formatLocalDate(
                                 booking.check_out_date,
                                 'MMM d, yyyy'
                               )}
@@ -590,8 +590,8 @@ export const HostDashboard = ({ user }: HostDashboardProps) => {
                               </span>
                             </td>
                             <td className="py-4 px-4 text-gray-700">
-                              {formatDate(booking.check_in_date, 'MMM d')} -{' '}
-                              {formatDate(booking.check_out_date, 'MMM d')}
+                              {formatLocalDate(booking.check_in_date, 'MMM d')} -{' '}
+                              {formatLocalDate(booking.check_out_date, 'MMM d')}
                             </td>
                             <td className="py-4 px-4 font-medium text-gray-900">
                               {formatCurrency(

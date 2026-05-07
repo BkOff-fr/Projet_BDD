@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { AlertTriangle } from 'lucide-react';
 import { bookingsAPI } from '@/services/api';
-import { formatDate } from '@/utils/helpers';
+import { formatLocalDate } from '@/utils/helpers';
 import { ModalShell } from './ModalShell';
 import type { Booking } from '@/types';
 
@@ -83,8 +83,8 @@ export const CancelBookingModal = ({
             {booking.accommodation.title}
           </p>
           <p className="text-sm text-gray-600 mt-0.5">
-            {formatDate(booking.checkInDate, 'MMM d')} -{' '}
-            {formatDate(booking.checkOutDate, 'MMM d, yyyy')}
+            {formatLocalDate(booking.checkInDate, 'MMM d')} -{' '}
+            {formatLocalDate(booking.checkOutDate, 'MMM d, yyyy')}
           </p>
         </div>
 
