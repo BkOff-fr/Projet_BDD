@@ -17,7 +17,7 @@ import {
 import { hostAPI } from '@/services/api';
 import { LoadingState, ErrorState } from '@/components';
 import { cn } from '@/utils/cn';
-import { formatLocalDate } from '@/utils/helpers';
+import { dateKey, formatLocalDate } from '@/utils/helpers';
 import type {
   CreatePricingRuleInput,
   HostProperty,
@@ -28,14 +28,6 @@ import type {
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-
-/** Format a Date as a local YYYY-MM-DD string (matches HostCalendarPage). */
-const dateKey = (d: Date): string => {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
-};
 
 const RULE_TYPE_OPTIONS: { value: PricingRuleType; label: string }[] = [
   { value: 'percentage_increase', label: 'Percentage increase (%)' },
@@ -70,9 +62,15 @@ const formatRuleEffect = (rule: PricingRule): string => {
   return `${sign}$${rounded}`;
 };
 
-/** Truthy check that handles MySQL's 0/1 booleans. */
+/**
+ * Truthy check that handles MySQL's 0/1 booleans.
+ *
+ * mysql2 may return TINYINT(1) as a boolean, a number (0/1), or a string
+ * ('0'/'1') depending on the driver version and connection options. We accept
+ * all three so a `'1'` string isn't silently treated as inactive.
+ */
 const isActive = (v: PricingRule['is_active']): boolean =>
-  v === true || v === 1;
+  v === true || v === 1 || v === '1';
 
 // ---------------------------------------------------------------------------
 // Add Pricing Rule modal

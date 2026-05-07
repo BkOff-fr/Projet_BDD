@@ -510,7 +510,7 @@ export interface Availability {
   accommodation_id: number;
   start_date: string;
   end_date: string;
-  is_available: number | boolean;
+  is_available: number | boolean | string;
   reason: string | null;
   created_at: string;
   updated_at: string;
@@ -526,7 +526,7 @@ export interface PricingRule {
   end_date: string;
   rule_type: PricingRuleType;
   value: number | string;
-  is_active: number | boolean;
+  is_active: number | boolean | string;
   created_at: string;
   updated_at: string;
 }

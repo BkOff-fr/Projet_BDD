@@ -17,7 +17,7 @@ import {
 import { hostAPI } from '@/services/api';
 import { LoadingState, ErrorState } from '@/components';
 import { cn } from '@/utils/cn';
-import { parseLocalDate, formatLocalDate } from '@/utils/helpers';
+import { dateKey, parseLocalDate, formatLocalDate } from '@/utils/helpers';
 import type {
   Availability,
   AvailabilityCalendar,
@@ -36,14 +36,6 @@ import type {
 // local Y/M/D directly, and `parseDateKey` parses a YYYY-MM-DD string into a
 // LOCAL Date at noon (noon avoids any DST 1am→3am edge cases).
 // ---------------------------------------------------------------------------
-
-/** Format a Date as a local YYYY-MM-DD string. Does NOT touch UTC. */
-const dateKey = (d: Date): string => {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
-};
 
 /** Local alias kept for readability — see `parseLocalDate` in utils/helpers. */
 const parseDateKey = parseLocalDate;
@@ -123,7 +115,10 @@ const buildMonthGrid = (
     // Sort ascending so the highest id ends up overwriting in the map.
     const sorted = [...data.availability].sort((a, b) => a.id - b.id);
     for (const row of sorted) {
-      const isBlocked = row.is_available === false || row.is_available === 0;
+      const isBlocked =
+        row.is_available === false ||
+        row.is_available === 0 ||
+        row.is_available === '0';
       if (!isBlocked) continue;
       for (const d of enumerateDateRange(
         row.start_date.split('T')[0],
@@ -921,7 +916,10 @@ export const HostCalendarPage = () => {
             Blocked ranges
           </h2>
           {calendar.availability.filter(
-            (a) => a.is_available === false || a.is_available === 0
+            (a) =>
+              a.is_available === false ||
+              a.is_available === 0 ||
+              a.is_available === '0'
           ).length === 0 ? (
             <p className="text-sm text-gray-600">
               No blocks yet. Click an available day above to add one.
@@ -929,7 +927,12 @@ export const HostCalendarPage = () => {
           ) : (
             <ul className="space-y-2">
               {calendar.availability
-                .filter((a) => a.is_available === false || a.is_available === 0)
+                .filter(
+                  (a) =>
+                    a.is_available === false ||
+                    a.is_available === 0 ||
+                    a.is_available === '0'
+                )
                 .sort((a, b) =>
                   a.start_date.localeCompare(b.start_date)
                 )

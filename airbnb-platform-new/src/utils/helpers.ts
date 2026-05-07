@@ -53,6 +53,21 @@ export const parseLocalDate = (s: string): Date => {
 export const formatLocalDate = (raw: string, fmt = 'MMM d, yyyy'): string =>
   format(parseLocalDate(raw), fmt);
 
+/**
+ * Format a Date as a local YYYY-MM-DD string. Does NOT touch UTC.
+ *
+ * Companion to `parseLocalDate` — used by the host calendar / pricing pages
+ * to key cells by local calendar date without crossing through `toISOString`,
+ * which would shift the date by a day near midnight in negative-offset
+ * timezones.
+ */
+export const dateKey = (d: Date): string => {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+};
+
 // Format short date
 export const formatShortDate = (date: Date | string): string => {
   const d = typeof date === 'string' ? parseISO(date) : date;
