@@ -1,21 +1,8 @@
-import {
-  useEffect,
-  useRef,
-  useState,
-  type MouseEvent as ReactMouseEvent,
-} from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { createPortal } from 'react-dom';
-import {
-  AlertTriangle,
-  ArrowLeft,
-  Plus,
-  Tag,
-  Trash2,
-  X,
-} from 'lucide-react';
+import { AlertTriangle, ArrowLeft, Plus, Tag, Trash2 } from 'lucide-react';
 import { hostAPI } from '@/services/api';
-import { LoadingState, ErrorState } from '@/components';
+import { LoadingState, ErrorState, ModalShell } from '@/components';
 import { cn } from '@/utils/cn';
 import { dateKey, formatLocalDate } from '@/utils/helpers';
 import type {
@@ -101,7 +88,8 @@ const AddPricingRuleModal = ({
   const [error, setError] = useState<string | null>(null);
   const nameInputRef = useRef<HTMLInputElement | null>(null);
 
-  // Reset on open + a11y wiring (focus capture, restore, inert root, esc).
+  // Reset form whenever the modal re-opens. The a11y shell (focus capture,
+  // inert root, escape, etc.) lives in ModalShell.
   useEffect(() => {
     if (!open) return;
     setName('');
@@ -117,33 +105,9 @@ const AddPricingRuleModal = ({
     setValueStr('');
     setSubmitting(false);
     setError(null);
-
-    const previouslyFocused = document.activeElement as HTMLElement | null;
-    const root = document.getElementById('root');
-    if (root) root.setAttribute('inert', '');
-    const t = window.setTimeout(() => nameInputRef.current?.focus(), 0);
-
-    return () => {
-      window.clearTimeout(t);
-      if (root) root.removeAttribute('inert');
-      previouslyFocused?.focus();
-    };
   }, [open]);
 
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && !submitting) onClose();
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [open, submitting, onClose]);
-
   if (!open) return null;
-
-  const handleBackdropClick = (e: ReactMouseEvent<HTMLDivElement>) => {
-    if (e.target === e.currentTarget && !submitting) onClose();
-  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -199,41 +163,19 @@ const AddPricingRuleModal = ({
   const valueStep = isPercentageRule(ruleType) ? '0.5' : '1';
   const valueMax = isPercentageRule(ruleType) ? 100 : undefined;
 
-  return createPortal(
-    <div
-      className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
-      onClick={handleBackdropClick}
+  return (
+    <ModalShell
+      open={open}
+      onClose={onClose}
+      title="Add pricing rule"
+      description="Adjust nightly price for a date range (e.g. holidays, off-season)."
+      submitting={submitting}
+      initialFocusRef={nameInputRef}
+      panelClassName="max-w-md max-h-[90vh] overflow-y-auto"
     >
-      <form
-        onSubmit={handleSubmit}
-        className="bg-white rounded-xl max-w-md w-full shadow-xl max-h-[90vh] overflow-y-auto"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="add-pricing-rule-title"
-      >
-        <div className="flex items-start justify-between gap-3 px-6 pt-6 pb-2">
-          <div>
-            <h2
-              id="add-pricing-rule-title"
-              className="text-lg font-semibold text-gray-900"
-            >
-              Add pricing rule
-            </h2>
-            <p className="text-sm text-gray-500 mt-0.5">
-              Adjust nightly price for a date range (e.g. holidays, off-season).
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={() => !submitting && onClose()}
-            disabled={submitting}
-            className="text-gray-400 hover:text-gray-600 disabled:opacity-50 -mt-1 -mr-1 p-1"
-            aria-label="Close"
-          >
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-
+      {/* The form is content; ModalShell is the dialog frame. Submit is wired
+          via the form's onSubmit so Enter inside any input triggers it. */}
+      <form onSubmit={handleSubmit}>
         <div className="px-6 py-4 space-y-3">
           <label className="block">
             <span className="text-sm font-medium text-gray-700">
@@ -391,8 +333,7 @@ const AddPricingRuleModal = ({
           </button>
         </div>
       </form>
-    </div>,
-    document.body
+    </ModalShell>
   );
 };
 
@@ -417,35 +358,14 @@ const DeletePricingRuleModal = ({
   const [error, setError] = useState<string | null>(null);
   const confirmRef = useRef<HTMLButtonElement | null>(null);
 
+  // Reset transient state on open. The a11y shell lives in ModalShell.
   useEffect(() => {
     if (!open) return;
     setSubmitting(false);
     setError(null);
-    const previouslyFocused = document.activeElement as HTMLElement | null;
-    const root = document.getElementById('root');
-    if (root) root.setAttribute('inert', '');
-    const t = window.setTimeout(() => confirmRef.current?.focus(), 0);
-    return () => {
-      window.clearTimeout(t);
-      if (root) root.removeAttribute('inert');
-      previouslyFocused?.focus();
-    };
   }, [open]);
 
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && !submitting) onClose();
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [open, submitting, onClose]);
-
   if (!open || !rule) return null;
-
-  const handleBackdropClick = (e: ReactMouseEvent<HTMLDivElement>) => {
-    if (e.target === e.currentTarget && !submitting) onClose();
-  };
 
   const handleConfirm = async () => {
     setSubmitting(true);
@@ -462,100 +382,72 @@ const DeletePricingRuleModal = ({
     }
   };
 
-  return createPortal(
-    <div
-      className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
-      onClick={handleBackdropClick}
+  return (
+    <ModalShell
+      open={open}
+      onClose={onClose}
+      title="Delete pricing rule?"
+      description="This rule will stop affecting future bookings. Bookings already made keep their original price."
+      submitting={submitting}
+      initialFocusRef={confirmRef}
+      icon={
+        <div className="w-10 h-10 rounded-full bg-red-50 flex items-center justify-center flex-shrink-0">
+          <AlertTriangle className="w-5 h-5 text-red-600" />
+        </div>
+      }
     >
-      <div
-        className="bg-white rounded-xl max-w-md w-full shadow-xl"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="delete-pricing-rule-title"
-      >
-        <div className="flex items-start justify-between gap-3 px-6 pt-6 pb-2">
-          <div className="flex items-start gap-3">
-            <div className="w-10 h-10 rounded-full bg-red-50 flex items-center justify-center flex-shrink-0">
-              <AlertTriangle className="w-5 h-5 text-red-600" />
-            </div>
-            <div>
-              <h2
-                id="delete-pricing-rule-title"
-                className="text-lg font-semibold text-gray-900"
-              >
-                Delete pricing rule?
-              </h2>
-              <p className="text-sm text-gray-500 mt-0.5">
-                This rule will stop affecting future bookings. Bookings already
-                made keep their original price.
-              </p>
-            </div>
-          </div>
-          <button
-            type="button"
-            onClick={() => !submitting && onClose()}
-            disabled={submitting}
-            className="text-gray-400 hover:text-gray-600 disabled:opacity-50 -mt-1 -mr-1 p-1"
-            aria-label="Close"
-          >
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-
-        <div className="px-6 py-4 space-y-3">
-          <div className="bg-gray-50 border border-gray-200 rounded-lg p-3">
-            <p className="font-medium text-gray-900">{rule.name}</p>
-            <p className="text-sm text-gray-600 mt-0.5">
-              {formatLocalDate(rule.start_date, 'MMM d')} -{' '}
-              {formatLocalDate(rule.end_date, 'MMM d, yyyy')}
-            </p>
-            <p className="text-sm text-gray-600 mt-1">
-              Effect:{' '}
-              <span
-                className={cn(
-                  'font-medium',
-                  isIncreaseRule(rule.rule_type)
-                    ? 'text-green-700'
-                    : 'text-red-700'
-                )}
-              >
-                {formatRuleEffect(rule)}
-              </span>
-            </p>
-          </div>
-
-          {error && (
-            <div
-              role="alert"
-              className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg p-3"
+      <div className="px-6 py-4 space-y-3">
+        <div className="bg-gray-50 border border-gray-200 rounded-lg p-3">
+          <p className="font-medium text-gray-900">{rule.name}</p>
+          <p className="text-sm text-gray-600 mt-0.5">
+            {formatLocalDate(rule.start_date, 'MMM d')} -{' '}
+            {formatLocalDate(rule.end_date, 'MMM d, yyyy')}
+          </p>
+          <p className="text-sm text-gray-600 mt-1">
+            Effect:{' '}
+            <span
+              className={cn(
+                'font-medium',
+                isIncreaseRule(rule.rule_type)
+                  ? 'text-green-700'
+                  : 'text-red-700'
+              )}
             >
-              {error}
-            </div>
-          )}
+              {formatRuleEffect(rule)}
+            </span>
+          </p>
         </div>
 
-        <div className="flex items-center justify-end gap-2 px-6 pb-6 pt-2">
-          <button
-            type="button"
-            onClick={onClose}
-            disabled={submitting}
-            className="px-4 py-2 text-sm font-medium text-gray-700 border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-50 transition-colors"
+        {error && (
+          <div
+            role="alert"
+            className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg p-3"
           >
-            Cancel
-          </button>
-          <button
-            ref={confirmRef}
-            type="button"
-            onClick={handleConfirm}
-            disabled={submitting}
-            className="px-4 py-2 text-sm font-semibold text-white bg-red-600 rounded-lg hover:bg-red-700 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
-          >
-            {submitting ? 'Deleting...' : 'Yes, delete'}
-          </button>
-        </div>
+            {error}
+          </div>
+        )}
       </div>
-    </div>,
-    document.body
+
+      <div className="flex items-center justify-end gap-2 px-6 pb-6 pt-2">
+        <button
+          type="button"
+          onClick={onClose}
+          disabled={submitting}
+          className="px-4 py-2 text-sm font-medium text-gray-700 border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-50 transition-colors"
+        >
+          Cancel
+        </button>
+        <button
+          ref={confirmRef}
+          type="button"
+          onClick={handleConfirm}
+          disabled={submitting}
+          className="px-4 py-2 text-sm font-semibold text-white bg-red-600 rounded-lg hover:bg-red-700 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
+        >
+          {submitting ? 'Deleting...' : 'Yes, delete'}
+        </button>
+      </div>
+    </ModalShell>
   );
 };
 

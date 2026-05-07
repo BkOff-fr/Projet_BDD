@@ -1,3 +1,4 @@
+export { ModalShell } from './ModalShell';
 export { Header } from './Header';
 export { SearchBar } from './SearchBar';
 export { AccommodationCard } from './AccommodationCard';

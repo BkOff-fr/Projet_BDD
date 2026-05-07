@@ -1,14 +1,9 @@
-import {
-  useEffect,
-  useRef,
-  useState,
-  type MouseEvent as ReactMouseEvent,
-} from 'react';
-import { createPortal } from 'react-dom';
-import { Star, X } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { Star } from 'lucide-react';
 import { bookingsAPI } from '@/services/api';
 import { cn } from '@/utils/cn';
 import { formatDate } from '@/utils/helpers';
+import { ModalShell } from './ModalShell';
 import type { Booking, CreateReviewInput } from '@/types';
 
 interface LeaveReviewModalProps {
@@ -127,8 +122,8 @@ const StarSelector = ({
  *   only included in the payload if the user explicitly picked them.
  * - Comment is optional, trimmed before send, capped at 1000 chars client-side
  *   (the server has its own validation).
- * - Focus lands on the first overall-rating star on open; restoration on close
- *   matches the CancelBookingModal pattern.
+ * - Focus lands on the first overall-rating star on open (via ModalShell's
+ *   `initialFocusRef`); restoration on close is handled by ModalShell.
  * - On success: `onReviewed()` then `onClose()`. On failure: inline error,
  *   modal stays open so the user can retry without losing their input.
  */
@@ -153,8 +148,8 @@ export const LeaveReviewModal = ({
   const [error, setError] = useState<string | null>(null);
   const firstStarRef = useRef<HTMLButtonElement | null>(null);
 
-  // Reset transient state, mark #root inert, focus first star, restore focus
-  // on close. Same pattern as CancelBookingModal.
+  // Reset transient state whenever a new booking opens the modal. The
+  // a11y shell (focus capture, inert root, escape, etc.) lives in ModalShell.
   useEffect(() => {
     if (!booking) return;
     setOverall(0);
@@ -169,33 +164,7 @@ export const LeaveReviewModal = ({
     setComment('');
     setSubmitting(false);
     setError(null);
-
-    const previouslyFocused = document.activeElement as HTMLElement | null;
-    const root = document.getElementById('root');
-    if (root) root.setAttribute('inert', '');
-
-    const t = window.setTimeout(() => {
-      firstStarRef.current?.focus();
-    }, 0);
-
-    return () => {
-      window.clearTimeout(t);
-      if (root) root.removeAttribute('inert');
-      previouslyFocused?.focus();
-    };
   }, [booking]);
-
-  // Escape closes the modal (unless mid-submit).
-  useEffect(() => {
-    if (!booking) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && !submitting) {
-        onClose();
-      }
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [booking, submitting, onClose]);
 
   if (!booking) return null;
 
@@ -235,158 +204,129 @@ export const LeaveReviewModal = ({
     }
   };
 
-  const handleBackdropClick = (e: ReactMouseEvent<HTMLDivElement>) => {
-    if (e.target === e.currentTarget && !submitting) {
-      onClose();
-    }
-  };
-
   const setCategory = (key: CategoryKey, value: number) => {
     setCategoryRatings((prev) => ({ ...prev, [key]: value }));
   };
 
-  return createPortal(
-    <div
-      className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 overflow-y-auto"
-      onClick={handleBackdropClick}
+  const subtitle = `${booking.accommodation.title} · ${formatDate(
+    booking.checkInDate,
+    'MMM d'
+  )} → ${formatDate(booking.checkOutDate, 'MMM d, yyyy')}`;
+
+  return (
+    <ModalShell
+      open={booking !== null}
+      onClose={onClose}
+      title="Rate your stay"
+      description={subtitle}
+      submitting={submitting}
+      initialFocusRef={firstStarRef}
+      panelClassName="max-w-lg max-h-[90vh] overflow-y-auto"
     >
-      <div
-        className="bg-white rounded-xl max-w-lg w-full shadow-xl my-auto"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="leave-review-title"
-      >
-        <div className="flex items-start justify-between gap-3 px-6 pt-6 pb-2">
-          <div>
-            <h2
-              id="leave-review-title"
-              className="text-lg font-semibold text-gray-900"
-            >
-              Rate your stay
-            </h2>
-            <p className="text-sm text-gray-500 mt-0.5 truncate">
-              {booking.accommodation.title} &middot;{' '}
-              {formatDate(booking.checkInDate, 'MMM d')} &rarr;{' '}
-              {formatDate(booking.checkOutDate, 'MMM d, yyyy')}
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={() => !submitting && onClose()}
-            disabled={submitting}
-            className="text-gray-400 hover:text-gray-600 disabled:opacity-50 -mt-1 -mr-1 p-1"
-            aria-label="Close"
-          >
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-
-        <div className="px-6 py-4 space-y-5">
-          {/* Overall rating — required */}
-          <div>
-            <div className="flex items-baseline justify-between mb-1.5">
-              <label className="text-sm font-semibold text-gray-900">
-                Overall rating
-                <span className="text-red-600 ml-1" aria-hidden="true">
-                  *
-                </span>
-              </label>
-              {overall > 0 && (
-                <span className="text-sm text-gray-600">
-                  {overall} / 5
-                </span>
-              )}
-            </div>
-            <StarSelector
-              value={overall}
-              onChange={setOverall}
-              ariaLabel="Overall rating"
-              firstStarRef={firstStarRef}
-              disabled={submitting}
-            />
-          </div>
-
-          {/* Category ratings — optional */}
-          <div className="border-t border-gray-100 pt-4">
-            <p className="text-sm font-semibold text-gray-900 mb-2">
-              Rate by category
-              <span className="text-xs text-gray-500 font-normal ml-2">
-                (optional)
-              </span>
-            </p>
-            <div className="space-y-2">
-              {CATEGORIES.map(({ key, label }) => (
-                <div
-                  key={key}
-                  className="flex items-center justify-between gap-3"
-                >
-                  <span className="text-sm text-gray-700">{label}</span>
-                  <StarSelector
-                    value={categoryRatings[key]}
-                    onChange={(v) => setCategory(key, v)}
-                    ariaLabel={label}
-                    disabled={submitting}
-                  />
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Comment — optional */}
-          <div className="border-t border-gray-100 pt-4">
-            <label
-              htmlFor="review-comment"
-              className="block text-sm font-semibold text-gray-900 mb-1.5"
-            >
-              Comment
-              <span className="text-xs text-gray-500 font-normal ml-2">
-                (optional)
+      <div className="px-6 py-4 space-y-5">
+        {/* Overall rating — required */}
+        <div>
+          <div className="flex items-baseline justify-between mb-1.5">
+            <label className="text-sm font-semibold text-gray-900">
+              Overall rating
+              <span className="text-red-600 ml-1" aria-hidden="true">
+                *
               </span>
             </label>
-            <textarea
-              id="review-comment"
-              value={comment}
-              onChange={(e) =>
-                setComment(e.target.value.slice(0, COMMENT_MAX_LENGTH))
-              }
-              disabled={submitting}
-              maxLength={COMMENT_MAX_LENGTH}
-              rows={4}
-              placeholder="Share more about your experience..."
-              className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary disabled:bg-gray-50 disabled:opacity-70 resize-none"
-            />
-            <p className="text-xs text-gray-500 mt-1 text-right">
-              {comment.length} / {COMMENT_MAX_LENGTH}
-            </p>
+            {overall > 0 && (
+              <span className="text-sm text-gray-600">
+                {overall} / 5
+              </span>
+            )}
           </div>
-
-          {error && (
-            <div role="alert" className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg p-3">
-              {error}
-            </div>
-          )}
-        </div>
-
-        <div className="flex items-center justify-end gap-2 px-6 pb-6 pt-2">
-          <button
-            type="button"
-            onClick={onClose}
+          <StarSelector
+            value={overall}
+            onChange={setOverall}
+            ariaLabel="Overall rating"
+            firstStarRef={firstStarRef}
             disabled={submitting}
-            className="px-4 py-2 text-sm font-medium text-gray-700 border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-50 transition-colors"
-          >
-            Cancel
-          </button>
-          <button
-            type="button"
-            onClick={handleSubmit}
-            disabled={submitting || overall < 1}
-            className="px-4 py-2 text-sm font-semibold text-white bg-primary rounded-lg hover:bg-primary-dark disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
-          >
-            {submitting ? 'Submitting...' : 'Submit review'}
-          </button>
+          />
         </div>
+
+        {/* Category ratings — optional */}
+        <div className="border-t border-gray-100 pt-4">
+          <p className="text-sm font-semibold text-gray-900 mb-2">
+            Rate by category
+            <span className="text-xs text-gray-500 font-normal ml-2">
+              (optional)
+            </span>
+          </p>
+          <div className="space-y-2">
+            {CATEGORIES.map(({ key, label }) => (
+              <div
+                key={key}
+                className="flex items-center justify-between gap-3"
+              >
+                <span className="text-sm text-gray-700">{label}</span>
+                <StarSelector
+                  value={categoryRatings[key]}
+                  onChange={(v) => setCategory(key, v)}
+                  ariaLabel={label}
+                  disabled={submitting}
+                />
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Comment — optional */}
+        <div className="border-t border-gray-100 pt-4">
+          <label
+            htmlFor="review-comment"
+            className="block text-sm font-semibold text-gray-900 mb-1.5"
+          >
+            Comment
+            <span className="text-xs text-gray-500 font-normal ml-2">
+              (optional)
+            </span>
+          </label>
+          <textarea
+            id="review-comment"
+            value={comment}
+            onChange={(e) =>
+              setComment(e.target.value.slice(0, COMMENT_MAX_LENGTH))
+            }
+            disabled={submitting}
+            maxLength={COMMENT_MAX_LENGTH}
+            rows={4}
+            placeholder="Share more about your experience..."
+            className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary disabled:bg-gray-50 disabled:opacity-70 resize-none"
+          />
+          <p className="text-xs text-gray-500 mt-1 text-right">
+            {comment.length} / {COMMENT_MAX_LENGTH}
+          </p>
+        </div>
+
+        {error && (
+          <div role="alert" className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg p-3">
+            {error}
+          </div>
+        )}
       </div>
-    </div>,
-    document.body
+
+      <div className="flex items-center justify-end gap-2 px-6 pb-6 pt-2">
+        <button
+          type="button"
+          onClick={onClose}
+          disabled={submitting}
+          className="px-4 py-2 text-sm font-medium text-gray-700 border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-50 transition-colors"
+        >
+          Cancel
+        </button>
+        <button
+          type="button"
+          onClick={handleSubmit}
+          disabled={submitting || overall < 1}
+          className="px-4 py-2 text-sm font-semibold text-white bg-primary rounded-lg hover:bg-primary-dark disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
+        >
+          {submitting ? 'Submitting...' : 'Submit review'}
+        </button>
+      </div>
+    </ModalShell>
   );
 };

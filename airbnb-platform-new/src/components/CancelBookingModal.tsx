@@ -1,8 +1,8 @@
-import { useEffect, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react';
-import { createPortal } from 'react-dom';
-import { AlertTriangle, X } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { AlertTriangle } from 'lucide-react';
 import { bookingsAPI } from '@/services/api';
 import { formatDate } from '@/utils/helpers';
+import { ModalShell } from './ModalShell';
 import type { Booking } from '@/types';
 
 interface CancelBookingModalProps {
@@ -38,47 +38,13 @@ export const CancelBookingModal = ({
   const [error, setError] = useState<string | null>(null);
   const confirmButtonRef = useRef<HTMLButtonElement | null>(null);
 
-  // Focus the confirm button when the modal opens, reset transient state, mark
-  // the rest of the app inert so keyboard focus is trapped inside the modal,
-  // and restore focus to the previously-focused element on close.
+  // Reset transient state whenever a new booking opens the modal. The
+  // a11y shell (focus capture, inert root, escape, etc.) lives in ModalShell.
   useEffect(() => {
     if (!booking) return;
     setSubmitting(false);
     setError(null);
-
-    // Capture the element that had focus when the modal opened so we can
-    // restore it on close (typically the trigger button).
-    const previouslyFocused = document.activeElement as HTMLElement | null;
-
-    // Mark #root inert so Tab/Shift+Tab can't reach background controls.
-    // The modal itself is portaled to document.body, so it stays interactive.
-    const root = document.getElementById('root');
-    if (root) root.setAttribute('inert', '');
-
-    // Defer focus to the next tick so the button is mounted.
-    const t = window.setTimeout(() => {
-      confirmButtonRef.current?.focus();
-    }, 0);
-
-    return () => {
-      window.clearTimeout(t);
-      if (root) root.removeAttribute('inert');
-      previouslyFocused?.focus();
-    };
   }, [booking]);
-
-  // Escape closes the modal (unless we're mid-submit — avoid yanking the UI
-  // out from under an in-flight request).
-  useEffect(() => {
-    if (!booking) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && !submitting) {
-        onClose();
-      }
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [booking, submitting, onClose]);
 
   if (!booking) return null;
 
@@ -97,96 +63,62 @@ export const CancelBookingModal = ({
     }
   };
 
-  const handleBackdropClick = (e: ReactMouseEvent<HTMLDivElement>) => {
-    // Only close when the click target is the backdrop itself, not a child.
-    if (e.target === e.currentTarget && !submitting) {
-      onClose();
-    }
-  };
-
-  return createPortal(
-    <div
-      className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
-      onClick={handleBackdropClick}
+  return (
+    <ModalShell
+      open={booking !== null}
+      onClose={onClose}
+      title="Cancel this booking?"
+      description="This action cannot be undone."
+      submitting={submitting}
+      initialFocusRef={confirmButtonRef}
+      icon={
+        <div className="w-10 h-10 rounded-full bg-red-50 flex items-center justify-center flex-shrink-0">
+          <AlertTriangle className="w-5 h-5 text-red-600" />
+        </div>
+      }
     >
-      <div
-        className="bg-white rounded-xl max-w-md w-full shadow-xl"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="cancel-booking-title"
-      >
-        <div className="flex items-start justify-between gap-3 px-6 pt-6 pb-2">
-          <div className="flex items-start gap-3">
-            <div className="w-10 h-10 rounded-full bg-red-50 flex items-center justify-center flex-shrink-0">
-              <AlertTriangle className="w-5 h-5 text-red-600" />
-            </div>
-            <div>
-              <h2
-                id="cancel-booking-title"
-                className="text-lg font-semibold text-gray-900"
-              >
-                Cancel this booking?
-              </h2>
-              <p className="text-sm text-gray-500 mt-0.5">
-                This action cannot be undone.
-              </p>
-            </div>
-          </div>
-          <button
-            type="button"
-            onClick={() => !submitting && onClose()}
-            disabled={submitting}
-            className="text-gray-400 hover:text-gray-600 disabled:opacity-50 -mt-1 -mr-1 p-1"
-            aria-label="Close"
-          >
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-
-        <div className="px-6 py-4 space-y-3">
-          <div className="bg-gray-50 border border-gray-200 rounded-lg p-3">
-            <p className="font-medium text-gray-900 truncate">
-              {booking.accommodation.title}
-            </p>
-            <p className="text-sm text-gray-600 mt-0.5">
-              {formatDate(booking.checkInDate, 'MMM d')} -{' '}
-              {formatDate(booking.checkOutDate, 'MMM d, yyyy')}
-            </p>
-          </div>
-
-          <p className="text-sm text-gray-700">
-            Refund eligibility depends on the host&apos;s cancellation policy.
-            You may not be refunded in full.
+      <div className="px-6 py-4 space-y-3">
+        <div className="bg-gray-50 border border-gray-200 rounded-lg p-3">
+          <p className="font-medium text-gray-900 truncate">
+            {booking.accommodation.title}
           </p>
-
-          {error && (
-            <div role="alert" className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg p-3">
-              {error}
-            </div>
-          )}
+          <p className="text-sm text-gray-600 mt-0.5">
+            {formatDate(booking.checkInDate, 'MMM d')} -{' '}
+            {formatDate(booking.checkOutDate, 'MMM d, yyyy')}
+          </p>
         </div>
 
-        <div className="flex items-center justify-end gap-2 px-6 pb-6 pt-2">
-          <button
-            type="button"
-            onClick={onClose}
-            disabled={submitting}
-            className="px-4 py-2 text-sm font-medium text-gray-700 border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-50 transition-colors"
-          >
-            Keep booking
-          </button>
-          <button
-            ref={confirmButtonRef}
-            type="button"
-            onClick={handleConfirm}
-            disabled={submitting}
-            className="px-4 py-2 text-sm font-semibold text-white bg-red-600 rounded-lg hover:bg-red-700 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
-          >
-            {submitting ? 'Cancelling...' : 'Yes, cancel'}
-          </button>
-        </div>
+        <p className="text-sm text-gray-700">
+          Refund eligibility depends on the host&apos;s cancellation policy.
+          You may not be refunded in full.
+        </p>
+
+        {error && (
+          <div role="alert" className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg p-3">
+            {error}
+          </div>
+        )}
       </div>
-    </div>,
-    document.body
+
+      <div className="flex items-center justify-end gap-2 px-6 pb-6 pt-2">
+        <button
+          type="button"
+          onClick={onClose}
+          disabled={submitting}
+          className="px-4 py-2 text-sm font-medium text-gray-700 border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-50 transition-colors"
+        >
+          Keep booking
+        </button>
+        <button
+          ref={confirmButtonRef}
+          type="button"
+          onClick={handleConfirm}
+          disabled={submitting}
+          className="px-4 py-2 text-sm font-semibold text-white bg-red-600 rounded-lg hover:bg-red-700 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
+        >
+          {submitting ? 'Cancelling...' : 'Yes, cancel'}
+        </button>
+      </div>
+    </ModalShell>
   );
 };
