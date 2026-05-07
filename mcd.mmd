@@ -1,195 +1,177 @@
+%% =============================================================================
+%% MCD — EC08-BDD Project (Accommodation Rental Platform)
+%% Aligned with 01_schema.sql.
+%% Annotations between brackets reference the PDF spec sections:
+%%   [§ 3]  → functional scope     [§ 4d] → security / alarm
+%%   [§ 4a] → business constraints [§ 4e] → contrasting test data
+%%   [§ 4b] → daily dashboard      [§ 4f] → marketing list w/ avg rating
+%%   [§ 4c] → search performance
+%% =============================================================================
 erDiagram
-    USER ||--o{ ACCOMMODATION : "hosts (1:N)"
-    USER ||--o{ BOOKING : "makes as guest (1:N)"
-    USER ||--o{ REVIEW : "writes (1:N)"
-    USER ||--o{ MESSAGE : "sends (1:N)"
-    USER ||--o{ MESSAGE : "receives (1:N)"
-    
-    ACCOMMODATION ||--o{ BOOKING : "has (1:N)"
-    ACCOMMODATION ||--o{ AVAILABILITY : "has (1:N)"
-    ACCOMMODATION ||--o{ PRICING : "has (1:1)"
-    ACCOMMODATION ||--o{ REVIEW : "receives (1:N)"
-    ACCOMMODATION ||--o{ ACCOMMODATION_AMENITY : "includes (1:N)"
-    ACCOMMODATION ||--o{ CANCELLATION_POLICY : "defines (1:N)"
-    
-    BOOKING ||--o{ PAYMENT : "generates (1:N)"
-    BOOKING ||--o{ REVIEW : "eligible for (1:1)"
-    BOOKING ||--o{ MESSAGE : "context for (1:N)"
-    
-    PRICING ||--o{ SEASONAL_RATE : "includes (1:N)"
-    PRICING ||--o{ ADDITIONAL_FEE : "includes (1:N)"
-    
-    AMENITY ||--o{ ACCOMMODATION_AMENITY : "categorized in (1:N)"
-    
-    CANCELLATION_POLICY ||--o{ CANCELLATION_RULE : "contains (1:N)"
-    
+    USER ||--o{ ACCOMMODATION       : "hosts (1:N)"
+    USER ||--o{ BOOKING             : "books as guest (1:N)"
+    USER ||--o{ MESSAGE             : "sends (1:N)"
+    USER ||--o{ MESSAGE             : "receives (1:N)"
+
+    CANCELLATION_POLICY ||--o{ ACCOMMODATION : "[§ 3] applies to (1:N)"
+
+    ACCOMMODATION ||--o{ BOOKING                : "has (1:N)"
+    ACCOMMODATION ||--o{ AVAILABILITY           : "[§ 3] has (1:N)"
+    ACCOMMODATION ||--o{ PRICING_RULE           : "[§ 3] has (1:N)"
+    ACCOMMODATION ||--o{ ACCOMMODATION_FEE      : "[§ 3] charges (1:N)"
+    ACCOMMODATION ||--o{ ACCOMMODATION_AMENITY  : "includes (1:N)"
+    ACCOMMODATION |o--o{ MESSAGE                : "context for (0:N)"
+
+    BOOKING ||--o{ PAYMENT : "[§ 3] generates (1:N)"
+    BOOKING ||--o| REVIEW  : "[§ 3] eligible for (1:1)"
+
+    AMENITY ||--o{ ACCOMMODATION_AMENITY : "categorised in (1:N)"
+
     USER {
-        int user_id PK
+        bigint id PK
         string email UK
         string password_hash
         string first_name
         string last_name
         string phone
-        date birth_date
         string profile_picture
-        text bio
         boolean is_host
-        boolean is_guest
-        enum account_status
-        timestamp registration_date
-        timestamp last_login
-        string address_line1
-        string address_line2
-        string city
-        string state
-        string postal_code
-        string country
-        boolean identity_verified
-        string government_id
-    }
-    
-    ACCOMMODATION {
-        int accommodation_id PK
-        string title
-        text description
-        enum property_type
-        enum accommodation_type
-        int max_guests
-        int bedrooms
-        int beds
-        int bathrooms
-        string address_line1
-        string address_line2
-        string city
-        string state
-        string postal_code
-        string country
-        decimal latitude
-        decimal longitude
-        boolean has_alarm_system
-        enum security_status
-        enum validation_status
-        text house_rules
-        int host_id FK
+        boolean is_active
         timestamp created_at
         timestamp updated_at
     }
-    
-    AVAILABILITY {
-        int availability_id PK
-        date start_date
-        date end_date
-        enum status
-        string reason
-        int accommodation_id FK
-    }
-    
-    BOOKING {
-        int booking_id PK
-        date check_in_date
-        date check_out_date
-        int num_guests
-        decimal total_price
-        enum booking_status
-        timestamp booking_date
-        timestamp confirmation_date
-        text special_requests
-        int guest_id FK
-        int accommodation_id FK
-        int cancellation_policy_id FK
-    }
-    
-    PRICING {
-        int pricing_id PK
-        decimal base_nightly_rate
-        string currency
-        int accommodation_id FK
-    }
-    
-    SEASONAL_RATE {
-        int seasonal_rate_id PK
-        string name
-        date start_date
-        date end_date
-        decimal rate_multiplier
-        decimal fixed_amount
-        enum rate_type
-        int pricing_id FK
-    }
-    
-    ADDITIONAL_FEE {
-        int additional_fee_id PK
-        string fee_name
-        decimal amount
-        enum fee_type
-        boolean is_required
-        int pricing_id FK
-    }
-    
-    PAYMENT {
-        int payment_id PK
-        enum payment_type
-        decimal amount
-        enum payment_status
-        string payment_method
-        string transaction_id UK
-        timestamp payment_date
-        timestamp processed_at
-        text notes
-        int booking_id FK
-    }
-    
+
     CANCELLATION_POLICY {
-        int policy_id PK
-        string policy_name
+        bigint id PK
+        string name UK
         text description
-        boolean is_default
-        int accommodation_id FK
+        int full_refund_days_before
+        int partial_refund_days_before
+        decimal partial_refund_percentage "0..100"
+        timestamp created_at
     }
-    
-    CANCELLATION_RULE {
-        int rule_id PK
-        int days_before_checkin
-        decimal refund_percentage
-        decimal penalty_amount
-        int policy_id FK
+
+    ACCOMMODATION {
+        bigint id PK
+        bigint host_id FK
+        bigint cancellation_policy_id FK
+        string title
+        text description
+        enum type "studio,apartment,house,villa,condo,cabin,guesthouse,private_room"
+        string address
+        string city "[§ 4c] indexed"
+        string country
+        decimal latitude
+        decimal longitude
+        int max_guests
+        int bedrooms
+        int beds
+        decimal bathrooms
+        decimal price_per_night
+        int minimum_nights
+        int maximum_nights
+        boolean instant_book
+        text house_rules
+        boolean is_active
+        boolean is_validated "[§ 4e] platform approval gate"
+        boolean has_alarm_system "[§ 4d] security gate"
+        boolean has_smoke_detector "[§ 4d]"
+        timestamp created_at
+        timestamp updated_at
     }
-    
-    REVIEW {
-        int review_id PK
-        int cleanliness_rating
-        int accuracy_rating
-        int communication_rating
-        int location_rating
-        int checkin_rating
-        int value_rating
-        decimal overall_rating
-        text comment
-        timestamp review_date
-        int guest_id FK
-        int accommodation_id FK
-        int booking_id FK
-    }
-    
-    MESSAGE {
-        int message_id PK
-        text content
-        timestamp sent_at
-        boolean is_read
-        timestamp read_at
-        int sender_id FK
-        int receiver_id FK
-        int booking_id FK
-    }
-    
+
     AMENITY {
-        int amenity_id PK
+        bigint id PK
         string name UK
         string category
         string icon
     }
-    
+
     ACCOMMODATION_AMENITY {
-        int accommodation_id FK
-        int amenity_id FK
+        bigint accommodation_id PK "FK"
+        bigint amenity_id PK "FK"
+    }
+
+    ACCOMMODATION_FEE {
+        bigint id PK
+        bigint accommodation_id FK
+        enum fee_type "cleaning,service,tax,pet,other"
+        decimal amount
+        boolean is_percentage
+    }
+
+    AVAILABILITY {
+        bigint id PK
+        bigint accommodation_id FK
+        date start_date
+        date end_date
+        boolean is_available "FALSE blocks bookings (§ 3)"
+        string reason
+        timestamp created_at
+        timestamp updated_at
+    }
+
+    PRICING_RULE {
+        bigint id PK
+        bigint accommodation_id FK
+        string name
+        text description
+        date start_date
+        date end_date
+        enum rule_type "fixed/percentage × increase/decrease"
+        decimal value
+        boolean is_active
+        timestamp created_at
+        timestamp updated_at
+    }
+
+    BOOKING {
+        bigint id PK
+        bigint accommodation_id FK
+        bigint guest_id FK
+        date check_in_date
+        date check_out_date
+        int num_guests
+        decimal total_price
+        enum status "pending,confirmed,cancelled,completed"
+        text special_requests
+        timestamp cancelled_at "[§ 3] auto-stamped by trigger"
+        timestamp created_at
+        timestamp updated_at
+    }
+
+    REVIEW {
+        bigint id PK
+        bigint booking_id FK,UK "[§ 3] reviewer & accommodation derived (3NF)"
+        int rating "[§ 4b] 1-5"
+        text comment
+        int cleanliness_rating
+        int accuracy_rating
+        int checkin_rating
+        int communication_rating
+        int location_rating
+        int value_rating
+        timestamp created_at
+    }
+
+    PAYMENT {
+        bigint id PK
+        bigint booking_id FK
+        decimal amount
+        enum payment_type "deposit,balance,full,refund,penalty"
+        enum payment_method "credit_card,paypal,bank_transfer"
+        enum status "pending,completed,failed,refunded"
+        string transaction_id
+        timestamp paid_at
+        timestamp created_at
+    }
+
+    MESSAGE {
+        bigint id PK
+        bigint sender_id FK
+        bigint receiver_id FK
+        bigint accommodation_id FK
+        string content
+        boolean is_read
+        timestamp created_at
     }

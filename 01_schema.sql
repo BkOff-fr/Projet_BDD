@@ -1,319 +1,303 @@
 -- =============================================================================
--- ACCOMMODATION RENTAL PLATFORM - DATABASE SCHEMA
--- Airbnb-like platform complete MySQL implementation
+-- ACCOMMODATION RENTAL PLATFORM - SCHEMA
+-- EC08-BDD Project — full coverage of the project specification
+-- Idempotent: drop in dependency order, then recreate.
 -- =============================================================================
--- Execute this file first to create all tables with primary keys and foreign keys
+-- Question-marker legend (used throughout the SQL files):
+--   [§ 3]  → Functional scope of the platform (cf. PDF section 3)
+--   [§ 4a] → Business constraints (PK / FK / CHECK / TRIGGER)
+--   [§ 4b] → Daily dashboard: lowest rating per accommodation
+--   [§ 4c] → Search performance by type
+--   [§ 4d] → Mandatory security requirements (alarm system)
+--   [§ 4e] → Test dataset variety + invalid attempts
+--   [§ 4f] → Marketing list with average rating
 -- =============================================================================
 
--- Drop database if exists and create fresh (optional - uncomment if needed)
--- DROP DATABASE IF EXISTS rental_platform;
--- CREATE DATABASE rental_platform;
--- USE rental_platform;
+SET FOREIGN_KEY_CHECKS = 0;
+DROP TABLE IF EXISTS payments;
+DROP TABLE IF EXISTS reviews;
+DROP TABLE IF EXISTS messages;
+DROP TABLE IF EXISTS bookings;
+DROP TABLE IF EXISTS pricing_rules;
+DROP TABLE IF EXISTS availability;
+DROP TABLE IF EXISTS accommodation_fees;
+DROP TABLE IF EXISTS accommodation_amenities;
+DROP TABLE IF EXISTS amenities;
+DROP TABLE IF EXISTS accommodations;
+DROP TABLE IF EXISTS cancellation_policies;
+DROP TABLE IF EXISTS users;
+SET FOREIGN_KEY_CHECKS = 1;
 
 -- =============================================================================
--- TABLE 1: users
--- Stores all platform users (guests and hosts)
+-- USERS
+-- A single account can act as guest and/or host (is_host flag).
+-- created_at represents seniority on the platform.
 -- =============================================================================
-CREATE TABLE IF NOT EXISTS users (
+CREATE TABLE users (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     email VARCHAR(255) NOT NULL UNIQUE,
     password_hash VARCHAR(255) NOT NULL,
     first_name VARCHAR(100) NOT NULL,
     last_name VARCHAR(100) NOT NULL,
     phone VARCHAR(20),
-    birth_date DATE,
-    account_status ENUM('active', 'suspended') DEFAULT 'active',
-    registration_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    is_host BOOLEAN DEFAULT FALSE,
-    
-    -- Indexes
-    INDEX idx_email (email),
-    INDEX idx_account_status (account_status),
-    INDEX idx_is_host (is_host)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-COMMENT='Platform users - both guests and hosts';
+    profile_picture VARCHAR(512),
+    is_host BOOLEAN NOT NULL DEFAULT FALSE,
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT chk_users_email_format CHECK (email LIKE '%_@_%._%'),
+    INDEX idx_users_email (email),
+    INDEX idx_users_is_host (is_host)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- =============================================================================
--- TABLE 2: accommodations
--- Properties available for rent
+-- [§ 3] [§ 4a]  CANCELLATION_POLICIES
+-- Each policy defines refund windows. A booking cancelled X days before
+-- check-in qualifies for a full / partial / no refund.
 -- =============================================================================
-CREATE TABLE IF NOT EXISTS accommodations (
+CREATE TABLE cancellation_policies (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(50) NOT NULL UNIQUE,
+    description TEXT NOT NULL,
+    full_refund_days_before INT NOT NULL,
+    partial_refund_days_before INT NOT NULL,
+    partial_refund_percentage DECIMAL(5,2) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT chk_policy_full_window CHECK (full_refund_days_before >= 0),
+    CONSTRAINT chk_policy_partial_window CHECK (partial_refund_days_before >= 0),
+    CONSTRAINT chk_policy_window_order CHECK (full_refund_days_before >= partial_refund_days_before),
+    CONSTRAINT chk_policy_partial_pct CHECK (partial_refund_percentage BETWEEN 0 AND 100)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- =============================================================================
+-- [§ 3] [§ 4d] [§ 4e]  ACCOMMODATIONS
+-- Inherent property characteristics, distinct from host info (FK only).
+--   is_validated  : platform-level approval gate         [§ 4e]
+--   has_alarm_system / has_smoke_detector : security    [§ 4d]
+-- =============================================================================
+CREATE TABLE accommodations (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     host_id BIGINT UNSIGNED NOT NULL,
+    cancellation_policy_id BIGINT UNSIGNED NOT NULL,
     title VARCHAR(255) NOT NULL,
-    description TEXT,
-    type ENUM('studio', 'apartment', 'house', 'villa', 'room') NOT NULL,
+    description TEXT NOT NULL,
+    type ENUM('apartment','house','villa','condo','cabin','guesthouse','studio','private_room') NOT NULL,
     address VARCHAR(255) NOT NULL,
     city VARCHAR(100) NOT NULL,
     country VARCHAR(100) NOT NULL,
-    capacity INT UNSIGNED NOT NULL,
-    bedrooms INT UNSIGNED NOT NULL DEFAULT 0,
-    bathrooms DECIMAL(3,1) UNSIGNED NOT NULL DEFAULT 0,
-    base_price_night DECIMAL(10,2) UNSIGNED NOT NULL,
-    is_validated BOOLEAN DEFAULT FALSE,
-    has_alarm_system BOOLEAN DEFAULT FALSE,
+    latitude DECIMAL(10,7),
+    longitude DECIMAL(10,7),
+    max_guests INT NOT NULL,
+    bedrooms INT NOT NULL,
+    beds INT NOT NULL,
+    bathrooms DECIMAL(3,1) NOT NULL,
+    price_per_night DECIMAL(10,2) NOT NULL,
+    minimum_nights INT NOT NULL DEFAULT 1,
+    maximum_nights INT,
+    instant_book BOOLEAN NOT NULL DEFAULT FALSE,
+    house_rules TEXT,
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    is_validated BOOLEAN NOT NULL DEFAULT FALSE,           -- [§ 4e]
+    has_alarm_system BOOLEAN NOT NULL DEFAULT FALSE,       -- [§ 4d]
+    has_smoke_detector BOOLEAN NOT NULL DEFAULT FALSE,     -- [§ 4d]
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    
-    -- Foreign Key to users (host)
-    CONSTRAINT fk_accommodation_host 
-        FOREIGN KEY (host_id) REFERENCES users(id) 
-        ON DELETE RESTRICT ON UPDATE CASCADE,
-    
-    -- Indexes for search performance
-    INDEX idx_type (type),
-    INDEX idx_city (city),
-    INDEX idx_country (country),
-    INDEX idx_capacity (capacity),
-    INDEX idx_base_price (base_price_night),
-    INDEX idx_is_validated (is_validated),
-    INDEX idx_location (city, country),
-    FULLTEXT INDEX idx_title_description (title, description)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-COMMENT='Accommodation properties listed by hosts';
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT fk_accommodation_host FOREIGN KEY (host_id) REFERENCES users(id) ON DELETE CASCADE,
+    CONSTRAINT fk_accommodation_policy FOREIGN KEY (cancellation_policy_id) REFERENCES cancellation_policies(id),
+    CONSTRAINT chk_acc_capacity CHECK (max_guests >= 1),
+    CONSTRAINT chk_acc_bedrooms CHECK (bedrooms >= 0),
+    CONSTRAINT chk_acc_beds CHECK (beds >= 1),
+    CONSTRAINT chk_acc_bathrooms CHECK (bathrooms >= 0),
+    CONSTRAINT chk_acc_price CHECK (price_per_night > 0),
+    CONSTRAINT chk_acc_min_nights CHECK (minimum_nights >= 1),
+    CONSTRAINT chk_acc_max_nights CHECK (maximum_nights IS NULL OR maximum_nights >= minimum_nights),
+    -- [§ 4d] No validation without an alarm system
+    CONSTRAINT chk_acc_validation_requires_alarm
+        CHECK (is_validated = FALSE OR has_alarm_system = TRUE),
+    INDEX idx_accommodations_type (type),
+    INDEX idx_accommodations_city (city),
+    INDEX idx_accommodations_host (host_id),
+    INDEX idx_accommodations_validated (is_validated),
+    -- [§ 4c] Composite index covering the search filter (type, city, validated, active)
+    INDEX idx_accommodations_search (type, city, is_validated, is_active)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- =============================================================================
--- TABLE 3: amenities
--- Available amenities that can be associated with accommodations
+-- AMENITIES (independent reference table)
 -- =============================================================================
-CREATE TABLE IF NOT EXISTS amenities (
-    id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+CREATE TABLE amenities (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     name VARCHAR(100) NOT NULL UNIQUE,
-    icon VARCHAR(50),
-    
-    INDEX idx_name (name)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-COMMENT='Available amenities (WiFi, Pool, Parking, etc.)';
+    category VARCHAR(50) NOT NULL,
+    icon VARCHAR(50)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- =============================================================================
--- TABLE 4: accommodation_amenities
--- Junction table for many-to-many relationship
+-- ACCOMMODATION_AMENITIES (M:N junction)
 -- =============================================================================
-CREATE TABLE IF NOT EXISTS accommodation_amenities (
+CREATE TABLE accommodation_amenities (
     accommodation_id BIGINT UNSIGNED NOT NULL,
-    amenity_id INT UNSIGNED NOT NULL,
-    
+    amenity_id BIGINT UNSIGNED NOT NULL,
     PRIMARY KEY (accommodation_id, amenity_id),
-    
-    CONSTRAINT fk_aa_accommodation 
-        FOREIGN KEY (accommodation_id) REFERENCES accommodations(id) 
-        ON DELETE CASCADE ON UPDATE CASCADE,
-    
-    CONSTRAINT fk_aa_amenity 
-        FOREIGN KEY (amenity_id) REFERENCES amenities(id) 
-        ON DELETE CASCADE ON UPDATE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-COMMENT='Junction table linking accommodations to their amenities';
+    CONSTRAINT fk_aa_accommodation FOREIGN KEY (accommodation_id) REFERENCES accommodations(id) ON DELETE CASCADE,
+    CONSTRAINT fk_aa_amenity FOREIGN KEY (amenity_id) REFERENCES amenities(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- =============================================================================
--- TABLE 5: availability
--- Tracks when accommodations are available or unavailable for booking
+-- [§ 3]  ACCOMMODATION_FEES (cleaning, service, tax, etc.)
+-- Separated from accommodations to keep that table identity-only.
+-- Used to reconstruct the total cost of a stay (cf. Q2 in 04_queries.sql).
 -- =============================================================================
-CREATE TABLE IF NOT EXISTS availability (
+CREATE TABLE accommodation_fees (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    accommodation_id BIGINT UNSIGNED NOT NULL,
+    fee_type ENUM('cleaning','service','tax','pet','other') NOT NULL,
+    amount DECIMAL(10,2) NOT NULL,
+    is_percentage BOOLEAN NOT NULL DEFAULT FALSE,
+    CONSTRAINT fk_fee_accommodation FOREIGN KEY (accommodation_id) REFERENCES accommodations(id) ON DELETE CASCADE,
+    CONSTRAINT chk_fee_amount CHECK (amount >= 0),
+    CONSTRAINT chk_fee_percentage CHECK (is_percentage = FALSE OR amount <= 100),
+    UNIQUE KEY uk_acc_fee_type (accommodation_id, fee_type),
+    INDEX idx_fees_accommodation (accommodation_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- =============================================================================
+-- [§ 3]  AVAILABILITY (host-defined blocked or open periods)
+-- A booking must NOT overlap a row where is_available = FALSE.
+-- Enforced by trigger trg_booking_validate_before_insert in 02_*.sql.
+-- =============================================================================
+CREATE TABLE availability (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     accommodation_id BIGINT UNSIGNED NOT NULL,
     start_date DATE NOT NULL,
     end_date DATE NOT NULL,
-    is_available BOOLEAN DEFAULT TRUE,
+    is_available BOOLEAN NOT NULL DEFAULT TRUE,
     reason VARCHAR(255),
-    
-    CONSTRAINT fk_availability_accommodation 
-        FOREIGN KEY (accommodation_id) REFERENCES accommodations(id) 
-        ON DELETE CASCADE ON UPDATE CASCADE,
-    
-    INDEX idx_accommodation_dates (accommodation_id, start_date, end_date),
-    INDEX idx_is_available (is_available)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-COMMENT='Availability periods for accommodations';
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT fk_availability_accommodation FOREIGN KEY (accommodation_id) REFERENCES accommodations(id) ON DELETE CASCADE,
+    CONSTRAINT chk_availability_dates CHECK (end_date >= start_date),
+    INDEX idx_availability_accommodation (accommodation_id),
+    INDEX idx_availability_dates (accommodation_id, start_date, end_date)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- =============================================================================
--- TABLE 6: pricing_rules
--- Dynamic pricing based on dates (seasonal, events)
+-- [§ 3]  PRICING_RULES (seasonal / event / promotion adjustments)
+-- A rule increases or decreases the base nightly price for a date window.
 -- =============================================================================
-CREATE TABLE IF NOT EXISTS pricing_rules (
+CREATE TABLE pricing_rules (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     accommodation_id BIGINT UNSIGNED NOT NULL,
+    name VARCHAR(255) NOT NULL,
+    description TEXT,
     start_date DATE NOT NULL,
     end_date DATE NOT NULL,
-    price_multiplier DECIMAL(4,2) UNSIGNED NOT NULL DEFAULT 1.00,
-    reason VARCHAR(255),
-    
-    CONSTRAINT fk_pricing_accommodation 
-        FOREIGN KEY (accommodation_id) REFERENCES accommodations(id) 
-        ON DELETE CASCADE ON UPDATE CASCADE,
-    
-    INDEX idx_accommodation_pricing_dates (accommodation_id, start_date, end_date)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-COMMENT='Special pricing rules for peak seasons and events';
+    rule_type ENUM('fixed_increase','percentage_increase','fixed_decrease','percentage_decrease') NOT NULL,
+    value DECIMAL(10,2) NOT NULL,
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT fk_pricing_accommodation FOREIGN KEY (accommodation_id) REFERENCES accommodations(id) ON DELETE CASCADE,
+    CONSTRAINT chk_pricing_dates CHECK (end_date >= start_date),
+    CONSTRAINT chk_pricing_value_positive CHECK (value > 0),
+    CONSTRAINT chk_pricing_pct_decrease_range CHECK (
+        rule_type <> 'percentage_decrease' OR value <= 100
+    ),
+    INDEX idx_pricing_accommodation (accommodation_id),
+    INDEX idx_pricing_dates (accommodation_id, start_date, end_date)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- =============================================================================
--- TABLE 7: additional_fees
--- Extra fees for accommodations (cleaning, service, tax)
+-- [§ 3]  BOOKINGS
+-- Lifecycle statuses: pending → confirmed → completed, or → cancelled.
+-- cancelled_at is set automatically when status transitions to 'cancelled'
+-- (trigger in 02_constraints_triggers.sql). Used for refund computation.
 -- =============================================================================
-CREATE TABLE IF NOT EXISTS additional_fees (
+CREATE TABLE bookings (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     accommodation_id BIGINT UNSIGNED NOT NULL,
-    fee_type ENUM('cleaning', 'service', 'tax') NOT NULL,
-    amount DECIMAL(10,2) UNSIGNED NOT NULL,
-    is_percentage BOOLEAN DEFAULT FALSE,
-    
-    CONSTRAINT fk_fees_accommodation 
-        FOREIGN KEY (accommodation_id) REFERENCES accommodations(id) 
-        ON DELETE CASCADE ON UPDATE CASCADE,
-    
-    INDEX idx_accommodation_fee_type (accommodation_id, fee_type)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-COMMENT='Additional fees applied to bookings';
-
--- =============================================================================
--- TABLE 8: cancellation_policies
--- Cancellation policy configuration per accommodation
--- =============================================================================
-CREATE TABLE IF NOT EXISTS cancellation_policies (
-    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-    accommodation_id BIGINT UNSIGNED NOT NULL,
-    policy_type ENUM('flexible', 'moderate', 'strict') NOT NULL DEFAULT 'moderate',
-    days_before_full_refund INT UNSIGNED DEFAULT 7,
-    partial_refund_percent DECIMAL(5,2) UNSIGNED DEFAULT 50.00,
-    no_refund_days_before INT UNSIGNED DEFAULT 1,
-    
-    CONSTRAINT fk_policy_accommodation 
-        FOREIGN KEY (accommodation_id) REFERENCES accommodations(id) 
-        ON DELETE CASCADE ON UPDATE CASCADE,
-    
-    INDEX idx_accommodation_policy (accommodation_id),
-    INDEX idx_policy_type (policy_type)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-COMMENT='Cancellation policies for each accommodation';
-
--- =============================================================================
--- TABLE 9: bookings
--- Main booking records
--- =============================================================================
-CREATE TABLE IF NOT EXISTS bookings (
-    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     guest_id BIGINT UNSIGNED NOT NULL,
-    accommodation_id BIGINT UNSIGNED NOT NULL,
     check_in_date DATE NOT NULL,
     check_out_date DATE NOT NULL,
-    status ENUM('pending', 'validated', 'canceled', 'completed') DEFAULT 'pending',
-    total_amount DECIMAL(12,2) UNSIGNED,
+    num_guests INT NOT NULL,
+    total_price DECIMAL(12,2) NOT NULL,
+    status ENUM('pending','confirmed','cancelled','completed') NOT NULL DEFAULT 'pending',
+    special_requests TEXT,
+    cancelled_at TIMESTAMP NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    cancellation_policy_id BIGINT UNSIGNED,
-    
-    CONSTRAINT fk_booking_guest 
-        FOREIGN KEY (guest_id) REFERENCES users(id) 
-        ON DELETE RESTRICT ON UPDATE CASCADE,
-    
-    CONSTRAINT fk_booking_accommodation 
-        FOREIGN KEY (accommodation_id) REFERENCES accommodations(id) 
-        ON DELETE RESTRICT ON UPDATE CASCADE,
-    
-    CONSTRAINT fk_booking_cancellation_policy 
-        FOREIGN KEY (cancellation_policy_id) REFERENCES cancellation_policies(id) 
-        ON DELETE SET NULL ON UPDATE CASCADE,
-    
-    -- Critical indexes for booking queries
-    INDEX idx_guest_id (guest_id),
-    INDEX idx_accommodation_id (accommodation_id),
-    INDEX idx_check_in_date (check_in_date),
-    INDEX idx_check_out_date (check_out_date),
-    INDEX idx_booking_dates (check_in_date, check_out_date),
-    INDEX idx_status (status),
-    INDEX idx_created_at (created_at)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-COMMENT='Booking records linking guests to accommodations';
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT fk_booking_accommodation FOREIGN KEY (accommodation_id) REFERENCES accommodations(id) ON DELETE CASCADE,
+    CONSTRAINT fk_booking_guest FOREIGN KEY (guest_id) REFERENCES users(id) ON DELETE CASCADE,
+    CONSTRAINT chk_booking_dates CHECK (check_out_date > check_in_date),
+    CONSTRAINT chk_booking_num_guests CHECK (num_guests >= 1),
+    CONSTRAINT chk_booking_total_price CHECK (total_price >= 0),
+    INDEX idx_bookings_accommodation (accommodation_id),
+    INDEX idx_bookings_guest (guest_id),
+    INDEX idx_bookings_status (status),
+    INDEX idx_bookings_dates (accommodation_id, check_in_date, check_out_date)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- =============================================================================
--- TABLE 10: payments
--- Payment records for bookings
+-- [§ 3]  REVIEWS (one per booking; reviewer & accommodation derived via
+-- booking — 3NF: avoids transitive dependencies)
 -- =============================================================================
-CREATE TABLE IF NOT EXISTS payments (
+CREATE TABLE reviews (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-    booking_id BIGINT UNSIGNED NOT NULL,
-    amount DECIMAL(12,2) NOT NULL,
-    payment_type ENUM('deposit', 'balance', 'refund', 'full') NOT NULL,
-    status ENUM('pending', 'completed', 'failed', 'refunded') DEFAULT 'pending',
-    payment_date TIMESTAMP NULL,
-    transaction_reference VARCHAR(100),
-    
-    CONSTRAINT fk_payment_booking 
-        FOREIGN KEY (booking_id) REFERENCES bookings(id) 
-        ON DELETE RESTRICT ON UPDATE CASCADE,
-    
-    INDEX idx_booking_id (booking_id),
-    INDEX idx_payment_type (payment_type),
-    INDEX idx_payment_status (status),
-    INDEX idx_payment_date (payment_date)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-COMMENT='Payment transactions for bookings';
-
--- =============================================================================
--- TABLE 11: reviews
--- Guest reviews for accommodations
--- =============================================================================
-CREATE TABLE IF NOT EXISTS reviews (
-    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-    booking_id BIGINT UNSIGNED NOT NULL,
-    accommodation_id BIGINT UNSIGNED NOT NULL,
-    guest_id BIGINT UNSIGNED NOT NULL,
-    rating INT UNSIGNED NOT NULL,
+    booking_id BIGINT UNSIGNED NOT NULL UNIQUE,
+    rating INT NOT NULL,
     comment TEXT,
+    cleanliness_rating INT,
+    accuracy_rating INT,
+    checkin_rating INT,
+    communication_rating INT,
+    location_rating INT,
+    value_rating INT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    
-    CONSTRAINT fk_review_booking 
-        FOREIGN KEY (booking_id) REFERENCES bookings(id) 
-        ON DELETE RESTRICT ON UPDATE CASCADE,
-    
-    CONSTRAINT fk_review_accommodation 
-        FOREIGN KEY (accommodation_id) REFERENCES accommodations(id) 
-        ON DELETE CASCADE ON UPDATE CASCADE,
-    
-    CONSTRAINT fk_review_guest 
-        FOREIGN KEY (guest_id) REFERENCES users(id) 
-        ON DELETE RESTRICT ON UPDATE CASCADE,
-    
-    -- Critical index for accommodation rating queries
-    INDEX idx_accommodation_id (accommodation_id),
-    INDEX idx_guest_id (guest_id),
-    INDEX idx_rating (rating),
-    INDEX idx_created_at (created_at)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-COMMENT='Guest reviews and ratings for accommodations';
+    CONSTRAINT fk_review_booking FOREIGN KEY (booking_id) REFERENCES bookings(id) ON DELETE CASCADE,
+    CONSTRAINT chk_review_rating CHECK (rating BETWEEN 1 AND 5),
+    CONSTRAINT chk_review_cleanliness CHECK (cleanliness_rating IS NULL OR cleanliness_rating BETWEEN 1 AND 5),
+    CONSTRAINT chk_review_accuracy CHECK (accuracy_rating IS NULL OR accuracy_rating BETWEEN 1 AND 5),
+    CONSTRAINT chk_review_checkin CHECK (checkin_rating IS NULL OR checkin_rating BETWEEN 1 AND 5),
+    CONSTRAINT chk_review_communication CHECK (communication_rating IS NULL OR communication_rating BETWEEN 1 AND 5),
+    CONSTRAINT chk_review_location CHECK (location_rating IS NULL OR location_rating BETWEEN 1 AND 5),
+    CONSTRAINT chk_review_value CHECK (value_rating IS NULL OR value_rating BETWEEN 1 AND 5)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- =============================================================================
--- TABLE 12: messages
--- Communication between users (guests and hosts)
+-- [§ 3]  MESSAGES (between users, optionally tied to an accommodation)
 -- =============================================================================
-CREATE TABLE IF NOT EXISTS messages (
+CREATE TABLE messages (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     sender_id BIGINT UNSIGNED NOT NULL,
     receiver_id BIGINT UNSIGNED NOT NULL,
-    booking_id BIGINT UNSIGNED NULL,
-    content TEXT NOT NULL,
-    sent_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    is_read BOOLEAN DEFAULT FALSE,
-    
-    CONSTRAINT fk_message_sender 
-        FOREIGN KEY (sender_id) REFERENCES users(id) 
-        ON DELETE RESTRICT ON UPDATE CASCADE,
-    
-    CONSTRAINT fk_message_receiver 
-        FOREIGN KEY (receiver_id) REFERENCES users(id) 
-        ON DELETE RESTRICT ON UPDATE CASCADE,
-    
-    CONSTRAINT fk_message_booking 
-        FOREIGN KEY (booking_id) REFERENCES bookings(id) 
-        ON DELETE SET NULL ON UPDATE CASCADE,
-    
-    INDEX idx_sender_id (sender_id),
-    INDEX idx_receiver_id (receiver_id),
-    INDEX idx_booking_id (booking_id),
-    INDEX idx_sent_at (sent_at),
-    INDEX idx_is_read (is_read)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-COMMENT='Messages between guests and hosts';
+    accommodation_id BIGINT UNSIGNED,
+    content VARCHAR(2000) NOT NULL,
+    is_read BOOLEAN NOT NULL DEFAULT FALSE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_message_sender FOREIGN KEY (sender_id) REFERENCES users(id) ON DELETE CASCADE,
+    CONSTRAINT fk_message_receiver FOREIGN KEY (receiver_id) REFERENCES users(id) ON DELETE CASCADE,
+    CONSTRAINT fk_message_accommodation FOREIGN KEY (accommodation_id) REFERENCES accommodations(id) ON DELETE SET NULL,
+    CONSTRAINT chk_message_distinct CHECK (sender_id <> receiver_id),
+    INDEX idx_messages_thread (sender_id, receiver_id, created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- =============================================================================
--- SCHEMA CREATION COMPLETE
+-- [§ 3]  PAYMENTS (multi-step transactions per booking — deposit, balance, refund)
 -- =============================================================================
-SELECT 'Schema created successfully!' AS status;
+CREATE TABLE payments (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    booking_id BIGINT UNSIGNED NOT NULL,
+    amount DECIMAL(12,2) NOT NULL,
+    payment_type ENUM('deposit','balance','full','refund','penalty') NOT NULL DEFAULT 'full',
+    payment_method ENUM('credit_card','paypal','bank_transfer') NOT NULL,
+    status ENUM('pending','completed','failed','refunded') NOT NULL DEFAULT 'pending',
+    transaction_id VARCHAR(100),
+    paid_at TIMESTAMP NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_payment_booking FOREIGN KEY (booking_id) REFERENCES bookings(id) ON DELETE CASCADE,
+    CONSTRAINT chk_payment_amount CHECK (amount > 0),
+    INDEX idx_payments_booking (booking_id),
+    INDEX idx_payments_status (status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+SELECT 'Schema created successfully.' AS status;

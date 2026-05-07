@@ -111,6 +111,18 @@ export const createBooking = asyncHandler(async (req: AuthRequest, res: Response
     return;
   }
 
+  // Platform validation gate (§ 4e)
+  if (!accommodation.is_validated) {
+    res.status(403).json({ error: 'This accommodation is not yet validated by the platform' });
+    return;
+  }
+
+  // Mandatory security gate (§ 4d) — alarm system required to take bookings
+  if (!accommodation.has_alarm_system) {
+    res.status(403).json({ error: 'This accommodation does not meet mandatory security requirements' });
+    return;
+  }
+
   // Check max guests
   if (data.numGuests > accommodation.max_guests) {
     res.status(400).json({ error: `Maximum ${accommodation.max_guests} guests allowed` });
@@ -151,39 +163,54 @@ export const createBooking = asyncHandler(async (req: AuthRequest, res: Response
   );
 
   const pricingRules = pricingRows as any[];
-  
+
   for (const rule of pricingRules) {
-    if (rule.rule_type === 'fixed_increase') {
-      totalPrice += parseFloat(rule.value);
-    } else if (rule.rule_type === 'percentage_increase') {
-      totalPrice *= (1 + parseFloat(rule.value) / 100);
+    const v = parseFloat(rule.value);
+    switch (rule.rule_type) {
+      case 'fixed_increase':       totalPrice += v;                  break;
+      case 'fixed_decrease':       totalPrice = Math.max(0, totalPrice - v); break;
+      case 'percentage_increase':  totalPrice *= 1 + v / 100;        break;
+      case 'percentage_decrease':  totalPrice *= Math.max(0, 1 - v / 100); break;
     }
   }
 
-  // Add fees
-  if (accommodation.cleaning_fee) {
-    totalPrice += parseFloat(accommodation.cleaning_fee);
-  }
-  if (accommodation.service_fee) {
-    totalPrice += parseFloat(accommodation.service_fee);
+  // Add fees from accommodation_fees table
+  const [feeRows] = await pool.execute(
+    `SELECT fee_type, amount, is_percentage FROM accommodation_fees WHERE accommodation_id = ?`,
+    [data.accommodationId]
+  );
+  for (const fee of feeRows as any[]) {
+    const amount = parseFloat(fee.amount);
+    if (fee.is_percentage) {
+      totalPrice += totalPrice * amount / 100;
+    } else {
+      totalPrice += amount;
+    }
   }
 
-  // Check for overlapping bookings
+  // Reject if dates overlap a host-blocked availability window
+  const [blockedRows] = await pool.execute(
+    `SELECT id FROM availability
+     WHERE accommodation_id = ?
+       AND is_available = false
+       AND start_date < ?
+       AND end_date   > ?`,
+    [data.accommodationId, data.checkOutDate, data.checkInDate]
+  );
+
+  if ((blockedRows as any[]).length > 0) {
+    res.status(409).json({ error: 'Accommodation is unavailable during the requested period' });
+    return;
+  }
+
+  // Reject overlapping active bookings
   const [overlapRows] = await pool.execute(
-    `SELECT id FROM bookings 
-     WHERE accommodation_id = ? 
-     AND status IN ('pending', 'confirmed')
-     AND (
-       (check_in_date <= ? AND check_out_date >= ?) OR
-       (check_in_date <= ? AND check_out_date >= ?) OR
-       (check_in_date >= ? AND check_out_date <= ?)
-     )`,
-    [
-      data.accommodationId,
-      data.checkOutDate, data.checkInDate,
-      data.checkOutDate, data.checkInDate,
-      data.checkInDate, data.checkOutDate,
-    ]
+    `SELECT id FROM bookings
+     WHERE accommodation_id = ?
+       AND status IN ('pending', 'confirmed')
+       AND check_in_date  < ?
+       AND check_out_date > ?`,
+    [data.accommodationId, data.checkOutDate, data.checkInDate]
   );
 
   if ((overlapRows as any[]).length > 0) {
@@ -288,15 +315,13 @@ export const createReview = asyncHandler(async (req: AuthRequest, res: Response)
   }
 
   await pool.execute(
-    `INSERT INTO reviews 
-     (booking_id, reviewer_id, accommodation_id, rating, comment,
-      cleanliness_rating, accuracy_rating, checkin_rating, 
+    `INSERT INTO reviews
+     (booking_id, rating, comment,
+      cleanliness_rating, accuracy_rating, checkin_rating,
       communication_rating, location_rating, value_rating, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())`,
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())`,
     [
       data.bookingId,
-      reviewerId,
-      booking.accommodation_id,
       data.rating,
       data.comment || null,
       data.cleanlinessRating || null,

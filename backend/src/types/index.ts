@@ -6,16 +6,28 @@ export interface User {
   phone?: string;
   profile_picture?: string;
   is_host: boolean;
+  is_active: boolean;
   created_at: Date;
   updated_at: Date;
+}
+
+export interface CancellationPolicy {
+  id: number;
+  name: string;
+  description: string;
+  full_refund_days_before: number;
+  partial_refund_days_before: number;
+  partial_refund_percentage: number;
+  created_at: Date;
 }
 
 export interface Accommodation {
   id: number;
   host_id: number;
+  cancellation_policy_id: number;
   title: string;
   description: string;
-  type: 'apartment' | 'house' | 'villa' | 'condo' | 'cabin' | 'guesthouse';
+  type: 'apartment' | 'house' | 'villa' | 'condo' | 'cabin' | 'guesthouse' | 'studio' | 'private_room';
   address: string;
   city: string;
   country: string;
@@ -26,13 +38,14 @@ export interface Accommodation {
   beds: number;
   bathrooms: number;
   price_per_night: number;
-  cleaning_fee?: number;
-  service_fee?: number;
   minimum_nights: number;
   maximum_nights?: number;
   instant_book: boolean;
   house_rules?: string;
   is_active: boolean;
+  is_validated: boolean;
+  has_alarm_system: boolean;
+  has_smoke_detector: boolean;
   created_at: Date;
   updated_at: Date;
 }
@@ -42,6 +55,39 @@ export interface Amenity {
   name: string;
   category: string;
   icon?: string;
+}
+
+export interface AccommodationFee {
+  id: number;
+  accommodation_id: number;
+  fee_type: 'cleaning' | 'service' | 'tax' | 'pet' | 'other';
+  amount: number;
+  is_percentage: boolean;
+}
+
+export interface Availability {
+  id: number;
+  accommodation_id: number;
+  start_date: Date;
+  end_date: Date;
+  is_available: boolean;
+  reason?: string;
+  created_at: Date;
+  updated_at: Date;
+}
+
+export interface PricingRule {
+  id: number;
+  accommodation_id: number;
+  name: string;
+  description?: string;
+  start_date: Date;
+  end_date: Date;
+  rule_type: 'fixed_increase' | 'percentage_increase' | 'fixed_decrease' | 'percentage_decrease';
+  value: number;
+  is_active: boolean;
+  created_at: Date;
+  updated_at: Date;
 }
 
 export interface Booking {
@@ -54,6 +100,7 @@ export interface Booking {
   total_price: number;
   status: 'pending' | 'confirmed' | 'cancelled' | 'completed';
   special_requests?: string;
+  cancelled_at?: Date;
   created_at: Date;
   updated_at: Date;
 }
@@ -61,8 +108,6 @@ export interface Booking {
 export interface Review {
   id: number;
   booking_id: number;
-  reviewer_id: number;
-  accommodation_id: number;
   rating: number;
   comment?: string;
   cleanliness_rating?: number;
@@ -88,6 +133,7 @@ export interface Payment {
   id: number;
   booking_id: number;
   amount: number;
+  payment_type: 'deposit' | 'balance' | 'full' | 'refund' | 'penalty';
   payment_method: 'credit_card' | 'paypal' | 'bank_transfer';
   status: 'pending' | 'completed' | 'failed' | 'refunded';
   transaction_id?: string;

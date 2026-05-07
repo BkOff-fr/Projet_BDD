@@ -156,7 +156,7 @@ export const getMyReviews = asyncHandler(async (req: AuthRequest, res: Response)
   const userId = req.user!.id;
 
   const [rows] = await pool.execute(
-    `SELECT r.*, 
+    `SELECT r.*,
             a.title as accommodation_title,
             a.city as accommodation_city,
             u.first_name as host_first_name
@@ -164,7 +164,7 @@ export const getMyReviews = asyncHandler(async (req: AuthRequest, res: Response)
      JOIN bookings b ON r.booking_id = b.id
      JOIN accommodations a ON b.accommodation_id = a.id
      JOIN users u ON a.host_id = u.id
-     WHERE r.reviewer_id = ?
+     WHERE b.guest_id = ?
      ORDER BY r.created_at DESC`,
     [userId]
   );
